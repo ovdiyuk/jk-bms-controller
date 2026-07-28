@@ -59,14 +59,16 @@ const bool DISCHARGE_LED_ON_WHEN_ACTIVE = true; // WHITE LED: увімкнени
 const unsigned long BMS_TIMEOUT_MS = 5000; // Таймаут зв'язку з BMS (мс)
 const unsigned long NO_CONN_BLINK_MS = 300; // Інтервал мигання при відсутності зв'язку (мс)
 
-bool dischargeEnabled = false;
+bool targetDischargeState = false;    // Цільовий стан розряду, заданий тумблером
+bool bmsActualDischargeState = false; // Реальний стан ключа розряду з BMS (тег 0xAC)
+unsigned long lastWriteRetryMs = 0;   // Час останнього повтору команди
+
 float bmsCurrentA = 0.0f;
 float bmsTempC = 0.0f;
 float bmsMinCellV = 3.300f;
 float bmsMaxCellV = 3.300f;
 float bmsCellDeltaV = 0.000f;
 uint8_t bmsSocPercent = 100;
-bool bmsDischargeConfirmed = false; // Підтвердження розряду від BMS
 
 unsigned long lastBmsRxMs = 0;     // Час останньої відповіді від BMS
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
@@ -242,9 +244,8 @@ void updateLedIndicators() {
   uint8_t activeFault = determineActiveFaultCode();
   updateYellowLedFaultBlink(activeFault);
 
-  // WHITE LED (GPIO10) - Discharge: горить коли розряд підтверджений
-  bool dischargeState = DISCHARGE_LED_ON_WHEN_ACTIVE ? bmsDischargeConfirmed : !bmsDischargeConfirmed;
-  digitalWrite(LED_PIN_DISCHARGE, dischargeState ? HIGH : LOW);
+  // WHITE LED (GPIO10) - Discharge active: відображає РЕАЛЬНИЙ підтверджений стан ключа розряду з BMS
+  digitalWrite(LED_PIN_DISCHARGE, bmsActualDischargeState ? HIGH : LOW);
 
   // BLUE LED (GPIO1) - Current:
   // - Розряд (струм < CURRENT_DISCHARGE_THRESHOLD_A) -> світиться постійно
@@ -311,18 +312,15 @@ void jkWriteRegister(uint8_t reg, uint8_t value) {
 }
 
 void setDischarge(bool on) {
-  dischargeEnabled = on;
-  bmsDischargeConfirmed = on; // Миттєве оновлення RED LED
-  
-  // Надсилаємо команду в BMS
+  targetDischargeState = on;
   jkWriteRegister(REG_DISCHARGE_SW, on ? 0x01 : 0x00);
 
-  Serial.printf(">>> SWITCH TOGGLED! Discharge = %s <<<\n",
+  Serial.printf(">>> SWITCH TOGGLED! Target Discharge = %s <<<\n",
                 on ? "ON" : "OFF");
 }
 
 void refreshDischargeState() {
-  jkWriteRegister(REG_DISCHARGE_SW, dischargeEnabled ? 0x01 : 0x00);
+  jkWriteRegister(REG_DISCHARGE_SW, targetDischargeState ? 0x01 : 0x00);
 }
 
 // Надсилання запиту телеметрії (струм, напруга, SOC, температура) до JK BMS
@@ -415,6 +413,14 @@ void parseTelemetryData(const uint8_t *buf, uint16_t len) {
     else if ((tag == 0x8B || tag == 0x8C || tag == 0x8D) && k + 2 < len - 4) {
       k += 3;
     }
+    // Тег 0xAB, 0xAC: Стан ключів заряду та розряду (1 байт)
+    else if (tag == 0xAB && k + 1 < len - 4) {
+      k += 2;
+    }
+    else if (tag == 0xAC && k + 1 < len - 4) {
+      bmsActualDischargeState = (buf[k + 1] != 0x00);
+      k += 2;
+    }
     // Тег 0x8E: Аварії / Захисти (Alarm Word 1) - 2 байти
     else if (tag == 0x8E && k + 2 < len - 4) {
       newAlarmWord = ((uint16_t)buf[k + 1] << 8) | buf[k + 2];
@@ -463,11 +469,11 @@ void processBmsResponses() {
       uint8_t reg = rxBuf[11];
 
       if (cmd == 0x02 && status == 0x00 && reg == REG_DISCHARGE_SW) {
-        bmsDischargeConfirmed = dischargeEnabled;
+        bmsActualDischargeState = targetDischargeState;
         lastBmsRxMs = millis();
 
-        Serial.printf("BMS Confirmed Discharge = %s\n",
-                      bmsDischargeConfirmed ? "ON" : "OFF");
+        Serial.printf("BMS Confirmed Discharge Write = %s\n",
+                      bmsActualDischargeState ? "ON" : "OFF");
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -534,10 +540,23 @@ void loop() {
     lastEdgeMs = now;
   }
 
-  if ((now - lastEdgeMs) >= DEBOUNCE_MS && raw != lastStablePressed) {
-    lastStablePressed = raw;
-    setDischarge(lastStablePressed);
-    lastRefreshMs = now;
+  if ((now - lastEdgeMs) >= DEBOUNCE_MS && raw != targetDischargeState) {
+    targetDischargeState = raw;
+    Serial.printf(">>> SWITCH TOGGLED! Target Discharge State = %s <<<\n",
+                  targetDischargeState ? "ON" : "OFF");
+    jkWriteRegister(REG_DISCHARGE_SW, targetDischargeState ? 0x01 : 0x00);
+    lastWriteRetryMs = now;
+  }
+
+  // АВТОМАТИЧНИЙ ПОВТОР (RETRY):
+  // Якщо реальний стан BMS НЕ відповідає положенню тумблера — повертаємо команду кожні 300 мс до підтвердження!
+  if (bmsConnected && (bmsActualDischargeState != targetDischargeState)) {
+    if (now - lastWriteRetryMs >= 300) {
+      lastWriteRetryMs = now;
+      jkWriteRegister(REG_DISCHARGE_SW, targetDischargeState ? 0x01 : 0x00);
+      Serial.printf("--> Resending Discharge command (%s) to match switch!\n",
+                    targetDischargeState ? "ON" : "OFF");
+    }
   }
 
   // Періодичний запит телеметрії від BMS (5 разів на секунду)
@@ -545,10 +564,5 @@ void loop() {
   if ((now - lastTelemetryReqMs) >= 200) {
     lastTelemetryReqMs = now;
     jkRequestTelemetry();
-  }
-
-  if ((now - lastRefreshMs) >= REFRESH_MS) {
-    lastRefreshMs = now;
-    refreshDischargeState();
   }
 }
