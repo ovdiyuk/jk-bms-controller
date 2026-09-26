@@ -1,32 +1,38 @@
 #include <Arduino.h>
 
 // ===== JK BMS UART control (old "NW" TTL protocol, GPS port, 115200 8N1) =====
-// Button on GPIO1 -> GND (INPUT_PULLUP)
-// LOW  (0V / GND) -> discharge ON
-// HIGH (3.3V)      -> discharge OFF
+// RED/YELLOW/GREEN indicator, common cathode, built-in resistors (3-6 V module).
+// Latching switch on GPIO1 -> 3.3 V (INPUT_PULLDOWN)
+// HIGH (3.3 V) -> discharge ON
+// LOW  (open)  -> discharge OFF
 //
-// Wiring:
-// - GPIO3 -> BMS RX
-// - GPIO4 -> BMS TX
-// - GPIO5 -> GREEN LED - SOC (solid >= 90%, blink < 90%)
-// - GPIO6 -> RED LED - Temperature (ON >= 32C, OFF <= 31C, blinks when >= 32C)
-// - GPIO7 -> YELLOW LED - Alarm / Faults (1..6 series blinks)
-// - GPIO10 -> WHITE LED - Discharge active
-// - GPIO1 -> BLUE LED - Current (solid: discharge < -2A, blink: charge > 2A)
-// - GPIO0 -> Button / Toggle switch (switches to GND)
-// - GPIO2 -> SPARE (unused)
-// - Common GND between BMS and MCU
+// Wiring (as actually built):
+// - GPIO3 (MCU RX) <- TX of the optical module   [module TX1]
+// - GPIO4 (MCU TX) -> RX of the optical module   [module RX1]
+// - GPIO5 -> RED LED
+// - GPIO6 -> YELLOW LED
+// - GPIO7 -> GREEN LED
+// - GPIO1 -> latching switch to 3.3 V
+// - GPIO2 -> SPARE, strapping pin, leave unconnected
+//
+// Indicator states (exactly one colour at a time):
+//   YELLOW solid - ready:   no faults, discharge OFF
+//   GREEN  solid - running: no faults, discharge ON, SOC > 20%
+//   GREEN  blink - running: no faults, discharge ON, SOC <= 20%
+//   RED    solid - running with faults: faults present, discharge ON
+//   RED    blink - stopped with faults: faults present, discharge OFF
+//   all three blink at 300 ms - no link to the BMS
+// - Common GND between the MCU and its optical module only.
+//   The BMS side is galvanically isolated: the link is a single WDM fiber.
 
-const uint8_t PIN_BUTTON = 0;         // GPIO0 (button / switch to GND)
+const uint8_t PIN_BUTTON = 1;         // GPIO1 - latching switch to 3.3 V
 const uint8_t BMS_RX_PIN = 3;         // GPIO3 (BMS RX)
 const uint8_t BMS_TX_PIN = 4;         // GPIO4 (BMS TX)
-const bool BUTTON_ACTIVE_LEVEL = LOW; // LOW (0V / GND) = discharge ON
+const bool BUTTON_ACTIVE_LEVEL = HIGH; // HIGH (3.3 V) = discharge ON
 
-const uint8_t LED_PIN_TEMP = 6;       // RED LED (Physical GPIO6) - temperature warning
-const uint8_t LED_PIN_SOC = 5;        // GREEN LED (Physical GPIO5) - SOC (battery level)
-const uint8_t LED_PIN_ALARM = 7;      // YELLOW LED (Physical GPIO7) - Alarms / Faults (1..6 blinks)
-const uint8_t LED_PIN_DISCHARGE = 10; // WHITE LED (Physical GPIO10) - discharge active
-const uint8_t LED_PIN_CURRENT = 1;    // BLUE LED (Physical GPIO1) - current (discharge/charge)
+const uint8_t LED_PIN_RED = 5;    // GPIO5 - faults
+const uint8_t LED_PIN_YELLOW = 6; // GPIO6 - ready
+const uint8_t LED_PIN_GREEN = 7;  // GPIO7 - running
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -39,22 +45,10 @@ const unsigned long REFRESH_MS = 5000; // periodic resend of state
 const unsigned long HEARTBEAT_INTERVAL_MS = 500;
 
 // ===== Налаштування порогів індикації (налаштовувані константи) =====
-const float CURRENT_DISCHARGE_THRESHOLD_A =
-    -2.0f; // BLUE LED: поріг розряду для постійного світіння (A)
-const float CURRENT_CHARGE_THRESHOLD_A =
-    2.0f; // BLUE LED: поріг заряду для мигання (A)
-const unsigned long CURRENT_BLINK_INTERVAL_MS =
-    500; // BLUE LED: інтервал мигання при заряді (мс)
-
-const float TEMP_HIGH_ON_C = 32.0f;  // RED LED: температура вмикання (°C)
-const float TEMP_HIGH_OFF_C = 31.0f; // RED LED: температура вимикання (°C)
-
 const uint8_t SOC_LOW_THRESHOLD_PERCENT =
-    90; // GREEN LED: поріг заряду (%), постійно >=90%, мигає <90%
-const unsigned long SOC_BLINK_INTERVAL_MS =
-    500; // GREEN LED: інтервал мигання при низкому заряді (мс)
-
-const bool DISCHARGE_LED_ON_WHEN_ACTIVE = true; // WHITE LED: увімкнений при активному розряді
+    20; // ЗЕЛЕНИЙ: понад цей заряд (%) горить рівно, на ньому й нижче мигає
+const unsigned long LED_BLINK_INTERVAL_MS =
+    500; // Інтервал мигання зеленого і червоного (мс)
 
 const unsigned long BMS_TIMEOUT_MS = 5000; // Таймаут зв'язку з BMS (мс)
 const unsigned long NO_CONN_BLINK_MS = 300; // Інтервал мигання при відсутності зв'язку (мс)
@@ -72,6 +66,7 @@ uint8_t bmsSocPercent = 100;
 
 unsigned long lastBmsRxMs = 0;     // Час останньої відповіді від BMS
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
+const char *ledState = "?";        // Поточний стан індикатора, для логу
 
 bool lastStablePressed = false;
 bool lastRawPressed = false;
@@ -88,17 +83,13 @@ void setupLeds() {
   pinMode(ONBOARD_LED_PIN, OUTPUT);
   setOnboardLed(false);
 
-  pinMode(LED_PIN_TEMP, OUTPUT);
-  pinMode(LED_PIN_SOC, OUTPUT);
-  pinMode(LED_PIN_ALARM, OUTPUT);
-  pinMode(LED_PIN_DISCHARGE, OUTPUT);
-  pinMode(LED_PIN_CURRENT, OUTPUT);
+  pinMode(LED_PIN_RED, OUTPUT);
+  pinMode(LED_PIN_YELLOW, OUTPUT);
+  pinMode(LED_PIN_GREEN, OUTPUT);
 
-  digitalWrite(LED_PIN_TEMP, LOW);
-  digitalWrite(LED_PIN_SOC, LOW);
-  digitalWrite(LED_PIN_ALARM, LOW);
-  digitalWrite(LED_PIN_DISCHARGE, LOW);
-  digitalWrite(LED_PIN_CURRENT, LOW);
+  digitalWrite(LED_PIN_RED, LOW);
+  digitalWrite(LED_PIN_YELLOW, LOW);
+  digitalWrite(LED_PIN_GREEN, LOW);
 }
 
 void updateHeartbeat() {
@@ -122,11 +113,9 @@ void updateNoConnectionBlink() {
     blinkState = !blinkState;
   }
 
-  digitalWrite(LED_PIN_TEMP, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_SOC, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_ALARM, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_DISCHARGE, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_CURRENT, blinkState ? HIGH : LOW);
+  digitalWrite(LED_PIN_RED, blinkState ? HIGH : LOW);
+  digitalWrite(LED_PIN_YELLOW, blinkState ? HIGH : LOW);
+  digitalWrite(LED_PIN_GREEN, blinkState ? HIGH : LOW);
 }
 
 // Визначення активного коду помилки (1..6) за реальними фізичними параметрами
@@ -153,115 +142,61 @@ uint8_t determineActiveFaultCode() {
 }
 
 // Неблокуюча індикація серіями коротких моргань на Жовтому LED (GPIO7)
-void updateYellowLedFaultBlink(uint8_t faultCode) {
-  if (faultCode == 0) {
-    digitalWrite(LED_PIN_ALARM, LOW);
-    return;
-  }
-
-  static unsigned long lastStepMs = 0;
-  static uint8_t blinkStep = 0;
-  static uint8_t activeCode = 0;
-  unsigned long now = millis();
-
-  if (activeCode != faultCode) {
-    activeCode = faultCode;
-    blinkStep = 0;
-    lastStepMs = now;
-  }
-
-  uint8_t totalSteps = activeCode * 2;
-
-  if (blinkStep < totalSteps) {
-    if (now - lastStepMs >= 200) {
-      lastStepMs = now;
-      blinkStep++;
-      bool ledOn = (blinkStep % 2 != 0);
-      digitalWrite(LED_PIN_ALARM, ledOn ? HIGH : LOW);
-    }
-  } else {
-    digitalWrite(LED_PIN_ALARM, LOW);
-    if (now - lastStepMs >= 1000) { // Пауза 1 секунда між серіями
-      lastStepMs = now;
-      blinkStep = 0;
-    }
-  }
-}
-
 void updateLedIndicators() {
   // Перевірка зв'язку з BMS
   bmsConnected = (lastBmsRxMs > 0) && (millis() - lastBmsRxMs < BMS_TIMEOUT_MS);
 
-  // Якщо BMS не відповідає — мигаємо всіма LED
+  // Немає зв'язку — мигаємо всіма трьома, це має пріоритет над усім іншим
   if (!bmsConnected) {
     updateNoConnectionBlink();
     return;
   }
 
-  static unsigned long lastSocBlinkMs = 0;
-  static bool socBlinkState = false;
-
-  static unsigned long lastCurrentBlinkMs = 0;
-  static bool currentBlinkState = false;
-
-  // RED LED (Physical GPIO6) - Temperature з гістерезисом:
-  // - Мигає при температурі >= TEMP_HIGH_ON_C (32°C)
-  // - Вимикається (LOW) при температурі <= TEMP_HIGH_OFF_C (31°C)
-  static bool tempActive = false;
-  static unsigned long lastTempBlinkMs = 0;
-  static bool tempBlinkState = false;
-
-  if (bmsTempC >= TEMP_HIGH_ON_C) {
-    tempActive = true;
-  } else if (bmsTempC <= TEMP_HIGH_OFF_C) {
-    tempActive = false;
+  static unsigned long lastBlinkMs = 0;
+  static bool blinkState = false;
+  if (millis() - lastBlinkMs >= LED_BLINK_INTERVAL_MS) {
+    lastBlinkMs = millis();
+    blinkState = !blinkState;
   }
 
-  if (tempActive) {
-    if (millis() - lastTempBlinkMs >= 500) {
-      lastTempBlinkMs = millis();
-      tempBlinkState = !tempBlinkState;
+  const uint8_t faultCode = determineActiveFaultCode();
+  // Беремо РЕАЛЬНИЙ стан ключа з BMS, а не положення тумблера:
+  // індикатор має показувати те, що є, а не те, що ми наказали.
+  const bool discharging = bmsActualDischargeState;
+
+  // Лог коду аварії при зміні — сам код на індикаторі більше не показується
+  static uint8_t lastLoggedFault = 0xFF;
+  if (faultCode != lastLoggedFault) {
+    lastLoggedFault = faultCode;
+    if (faultCode == 0) {
+      Serial.println("FAULT cleared");
+    } else {
+      Serial.printf("FAULT code %u active\n", faultCode);
     }
-    digitalWrite(LED_PIN_TEMP, tempBlinkState ? HIGH : LOW);
-  } else {
-    digitalWrite(LED_PIN_TEMP, LOW);
   }
 
-  // GREEN LED (GPIO6) - SOC:
-  // - Заряд >= SOC_LOW_THRESHOLD_PERCENT -> горить постійно (HIGH)
-  // - Заряд < SOC_LOW_THRESHOLD_PERCENT  -> мигає
-  if (bmsSocPercent >= SOC_LOW_THRESHOLD_PERCENT) {
-    digitalWrite(LED_PIN_SOC, HIGH);
+  bool red = false, yellow = false, green = false;
+
+  if (faultCode != 0) {
+    // Є аварія: працює з помилками — рівно, не працює з помилками — мигає
+    red = discharging ? true : blinkState;
+    ledState = discharging ? "RED solid  (faults, running)"
+                           : "RED blink  (faults, stopped)";
+  } else if (discharging) {
+    // Аварій немає, розряд активний: понад поріг — рівно, на порозі й нижче — мигає
+    green = (bmsSocPercent > SOC_LOW_THRESHOLD_PERCENT) ? true : blinkState;
+    ledState = (bmsSocPercent > SOC_LOW_THRESHOLD_PERCENT)
+                   ? "GREEN solid (running)"
+                   : "GREEN blink (running, SOC low)";
   } else {
-    if (millis() - lastSocBlinkMs >= SOC_BLINK_INTERVAL_MS) {
-      lastSocBlinkMs = millis();
-      socBlinkState = !socBlinkState;
-    }
-    digitalWrite(LED_PIN_SOC, socBlinkState ? HIGH : LOW);
+    // Аварій немає, розряд вимкнений: батарея готова
+    yellow = true;
+    ledState = "YELLOW solid (ready)";
   }
 
-  // YELLOW LED (GPIO7) - Аварії / Захисти (серії з 1..6 коротких моргань):
-  uint8_t activeFault = determineActiveFaultCode();
-  updateYellowLedFaultBlink(activeFault);
-
-  // WHITE LED (GPIO10) - Discharge active: відображає РЕАЛЬНИЙ підтверджений стан ключа розряду з BMS
-  digitalWrite(LED_PIN_DISCHARGE, bmsActualDischargeState ? HIGH : LOW);
-
-  // BLUE LED (GPIO1) - Current:
-  // - Розряд (струм < CURRENT_DISCHARGE_THRESHOLD_A) -> світиться постійно
-  // - Заряд (струм > CURRENT_CHARGE_THRESHOLD_A)   -> мигає
-  // - Спокій -> вимкнений (LOW)
-  if (bmsCurrentA < CURRENT_DISCHARGE_THRESHOLD_A) {
-    digitalWrite(LED_PIN_CURRENT, HIGH);
-  } else if (bmsCurrentA > CURRENT_CHARGE_THRESHOLD_A) {
-    if (millis() - lastCurrentBlinkMs >= CURRENT_BLINK_INTERVAL_MS) {
-      lastCurrentBlinkMs = millis();
-      currentBlinkState = !currentBlinkState;
-    }
-    digitalWrite(LED_PIN_CURRENT, currentBlinkState ? HIGH : LOW);
-  } else {
-    digitalWrite(LED_PIN_CURRENT, LOW);
-  }
+  digitalWrite(LED_PIN_RED, red ? HIGH : LOW);
+  digitalWrite(LED_PIN_YELLOW, yellow ? HIGH : LOW);
+  digitalWrite(LED_PIN_GREEN, green ? HIGH : LOW);
 }
 
 // Формує та шле фрейм запису одного регістра:
@@ -495,8 +430,9 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V\n",
-            bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV);
+            "BMS Status: Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | LED: %s\n",
+            bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
+            bmsActualDischargeState ? "ON " : "OFF", ledState);
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -510,7 +446,7 @@ void processBmsResponses() {
 }
 
 void setup() {
-  pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_BUTTON, INPUT_PULLDOWN); // switch pulls the pin UP to 3.3 V
   setupLeds();
 
   Serial.begin(115200);
