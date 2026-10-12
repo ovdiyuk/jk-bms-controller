@@ -1,5 +1,7 @@
 # Апаратна специфікація
 
+Принципова схема підключення — [wiring.svg](wiring.svg).
+
 ## Плата: ESP32-C3 Super Mini
 
 Джерело: [mischianti.org — ESP32-C3 Super Mini: high-resolution pinout, datasheet, and specs](https://mischianti.org/esp32-c3-super-mini-high-resolution-pinout-datasheet-and-specs/)

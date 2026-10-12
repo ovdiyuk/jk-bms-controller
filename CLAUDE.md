@@ -74,8 +74,9 @@ upload and the log. This depends on the `build_flags` in `platformio.ini`.
 
 ## Hardware
 
-Board is an **ESP32-C3 Super Mini** — see [HARDWARE.md](HARDWARE.md) for the full pinout, board
-traps and the optical link; read it before touching pin assignments. `platformio.ini` declares
+Board is an **ESP32-C3 Super Mini**. [wiring.svg](wiring.svg) is the schematic — power tree,
+indicator, optical link and the BMS end on one sheet. [HARDWARE.md](HARDWARE.md) has the full
+pinout and the board traps; read it before touching pin assignments. `platformio.ini` declares
 `board = esp32-c3-devkitm-1` deliberately (no Super Mini profile exists; same chip and flash).
 
 | GPIO | Role |
