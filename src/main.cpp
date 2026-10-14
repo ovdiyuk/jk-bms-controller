@@ -791,7 +791,7 @@ void updateOled() {
   const uint8_t w = oled.getDisplayWidth() - 2 * OLED_MARGIN_X;
 
   if (millis() < statusOverlayUntilMs) {
-    const char *word = bmsActualDischargeState ? "Arming" : "Disarming";
+    const char *word = bmsActualDischargeState ? "Armed" : "Disarmed";
     oled.setFont(u8g2_font_10x20_tr);
     uint8_t tw = oled.getStrWidth(word);
     oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
