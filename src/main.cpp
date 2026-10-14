@@ -606,6 +606,44 @@ void processBmsResponses() {
 // ===== OLED =====
 // Дисплей навмисно НЕ є обовязковим: якщо він не відповів на шині або
 // підвис під перешкодою, керування розрядом має працювати далі.
+// Якщо раб завис посеред передачі, він утримує SDA, доки не дотягне свій
+// байт. Стандартне звільнення: до девяти тактів на SCL, щоб він добив
+// байт і відпустив лінію, потім STOP — перехід SDA з 0 в 1 при високому
+// SCL. Все вручну, бо Wire на зайнятій шині не стартує.
+bool recoverI2cBus() {
+  pinMode(OLED_SDA_PIN, INPUT_PULLUP);
+  pinMode(OLED_SCL_PIN, OUTPUT_OPEN_DRAIN);
+  digitalWrite(OLED_SCL_PIN, HIGH);
+  delayMicroseconds(10);
+
+  uint8_t pulses = 0;
+  while (digitalRead(OLED_SDA_PIN) == LOW && pulses < 9) {
+    digitalWrite(OLED_SCL_PIN, LOW);
+    delayMicroseconds(10);
+    digitalWrite(OLED_SCL_PIN, HIGH);
+    delayMicroseconds(10);
+    pulses++;
+  }
+
+  // STOP
+  pinMode(OLED_SDA_PIN, OUTPUT_OPEN_DRAIN);
+  digitalWrite(OLED_SDA_PIN, LOW);
+  delayMicroseconds(10);
+  digitalWrite(OLED_SCL_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(OLED_SDA_PIN, HIGH);
+  delayMicroseconds(10);
+
+  pinMode(OLED_SDA_PIN, INPUT_PULLUP);
+  pinMode(OLED_SCL_PIN, INPUT_PULLUP);
+  delay(5);
+
+  bool freed = (digitalRead(OLED_SDA_PIN) == HIGH);
+  Serial.printf("OLED: bus recovery, %u pulses -> SDA %s\n", pulses,
+                freed ? "released" : "still low");
+  return freed;
+}
+
 bool probeOledAddress(uint8_t addr7) {
   Wire.beginTransmission(addr7);
   return Wire.endTransmission() == 0;
@@ -626,8 +664,13 @@ void setupOled() {
   Serial.printf("OLED: idle levels SDA=%d SCL=%d\n", sdaIdle, sclIdle);
 
   if (sdaIdle == LOW || sclIdle == LOW) {
-    Serial.println("OLED: bus is held low - skipping I2C entirely");
-    return;
+    // Перш ніж здаватися, пробуємо розчепити шину
+    if (!recoverI2cBus()) {
+      Serial.println("OLED: bus still held low - skipping I2C entirely");
+      return;
+    }
+    oledSdaIdle = digitalRead(OLED_SDA_PIN);
+    oledSclIdle = digitalRead(OLED_SCL_PIN);
   }
 
   Wire.end(); // на випадок повторної спроби
