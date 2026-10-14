@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <esp_system.h>
 #include <U8g2lib.h>
+#include <WebServer.h>
+#include <WiFi.h>
 #include <Wire.h>
 
 // ===== JK BMS UART control (old "NW" TTL protocol, GPS port, 115200 8N1) =====
@@ -63,6 +65,16 @@ const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k
 const uint8_t VBAT_SAMPLES = 16;      // усереднення проти шуму від бустерів
 const unsigned long VBAT_PERIOD_MS = 1000;
 const unsigned long STATUS_OVERLAY_MS = 5000; // ARM/DISARM після перемикання
+
+// ===== Точка доступу =====
+// Увага: це передавач 2.4 ГГц на пульті, що стоїть поряд з РЕБ. Діапазон
+// може бути придушений власною установкою, а пульт стає помітним в ефірі.
+// Вимикається одним нулем.
+#define WIFI_AP_ENABLED 1
+const char *AP_SSID = "JK-Pult";
+const char *AP_PASS = "zminy-mene-12";  // ЗМІНІТЬ ПЕРЕД ПОЛЬОВИМ ВИКОРИСТАННЯМ
+const uint8_t AP_CHANNEL = 6;
+const uint8_t AP_MAX_CLIENTS = 2;
 
 // Опитування BMS адаптивне: у спокої рідко, щоб не їсти батарею пульта,
 // але поки команда не підтверджена — часто, щоб ARM/DISARM не чекав секунду.
@@ -139,6 +151,20 @@ uint8_t bmsSocPercent = 100;
 unsigned long lastBmsRxMs = 0;     // Час останньої відповіді від BMS
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
 const char *ledState = "?";        // Поточний стан індикатора, для логу
+const char *ledWeb = "nc";         // Короткий код стану для веба
+
+// Рядки інтерфейсу. Будуються один раз і йдуть і на екран, і у веб,
+// щоб сторінка показувала рівно те саме, що й дисплей.
+char uiLine[4][40] = {"", "", "", ""};
+
+// Хто керує ключем. За умовчанням — фізичний тумблер; веб перехоплює
+// керування лише коли на сторінці явно поставлена галочка.
+bool webControlEnabled = false;
+
+#if WIFI_AP_ENABLED
+WebServer server(80);
+bool apUp = false;
+#endif
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
 float bmsCapacityAh = 0.0f;        // Ємність збірки, тег 0xAA
 float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
@@ -234,6 +260,8 @@ void updateLedIndicators() {
   // Немає зв'язку — мигаємо всіма трьома, це має пріоритет над усім іншим
   if (!bmsConnected) {
     updateNoConnectionBlink();
+    ledState = "ALL blink (no link)";
+    ledWeb = "nc";
     return;
   }
 
@@ -267,16 +295,19 @@ void updateLedIndicators() {
     red = discharging ? true : blinkState;
     ledState = discharging ? "RED solid  (faults, running)"
                            : "RED blink  (faults, stopped)";
+    ledWeb = discharging ? "r" : "rb";
   } else if (discharging) {
     // Аварій немає, розряд активний: понад поріг — рівно, на порозі й нижче — мигає
     green = (bmsSocPercent > SOC_LOW_THRESHOLD_PERCENT) ? true : blinkState;
     ledState = (bmsSocPercent > SOC_LOW_THRESHOLD_PERCENT)
                    ? "GREEN solid (running)"
                    : "GREEN blink (running, SOC low)";
+    ledWeb = (bmsSocPercent > SOC_LOW_THRESHOLD_PERCENT) ? "g" : "gb";
   } else {
     // Аварій немає, розряд вимкнений: батарея готова
     yellow = true;
     ledState = "YELLOW solid (ready)";
+    ledWeb = "y";
   }
 
   digitalWrite(LED_PIN_RED, red ? HIGH : LOW);
@@ -525,10 +556,16 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | AP = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
             bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
-            oledPresent ? "ok" : "--", remoteBatteryV,
+            oledPresent ? "ok" : "--",
+#if WIFI_AP_ENABLED
+            apUp ? WiFi.softAPIP().toString().c_str() : "down",
+#else
+            "off",
+#endif
+            remoteBatteryV,
             (unsigned long)remoteBatteryRawMv,
             remoteCharging ? "zaryad" : "rozryad",
             remoteRateValid ? remoteRatePctPerH : 0.0f, ledState);
@@ -664,6 +701,63 @@ const char *faultName(uint8_t code) {
   }
 }
 
+// Будує чотири рядки інтерфейсу. Викликається з циклу незалежно від того,
+// чи є дисплей: ці самі рядки віддаються у веб.
+// Єдине місце, де змінюється бажаний стан ключа — і з тумблера, і з вебу.
+void applyDischargeCommand(bool on, const char *source) {
+  targetDischargeState = on;
+  statusOverlayUntilMs = millis() + STATUS_OVERLAY_MS;
+  jkWriteRegister(REG_DISCHARGE_SW, on ? 0x01 : 0x00);
+  lastWriteRetryMs = millis();
+  Serial.printf(">>> DISCHARGE %s (%s) <<<\n", on ? "ON" : "OFF", source);
+}
+
+void buildUiLines() {
+  char buf[40];
+
+  uint8_t pultPct = liPoPercent(remoteBatteryV);
+  snprintf(uiLine[0], sizeof(uiLine[0]), "Пульт %u%% %.2fВ", (unsigned)pultPct,
+           remoteBatteryV);
+
+  const char *pultLbl = remoteCharging ? "Заряд" : "Розряд";
+  float pultH = -1.0f;
+  if (remoteRateValid && remoteRatePctPerH > RATE_MIN_PCT_PER_H) {
+    pultH = (100.0f - (float)pultPct) / remoteRatePctPerH;
+  } else if (remoteRateValid && remoteRatePctPerH < -RATE_MIN_PCT_PER_H) {
+    pultH = (float)pultPct / -remoteRatePctPerH;
+  } else if (!remoteCharging && remoteBatteryV > 0.0f) {
+    float mah = (float)PULT_CAPACITY_MAH * (float)pultPct / 100.0f;
+    pultH = mah / (float)PULT_TYPICAL_DRAW_MA;
+  }
+  formatRuntime(uiLine[1], sizeof(uiLine[1]), pultLbl, pultH);
+
+  if (bmsConnected) {
+    snprintf(uiLine[2], sizeof(uiLine[2]), "РЕБ %u%% %.1fA",
+             (unsigned)bmsSocPercent, bmsCurrentA);
+  } else {
+    snprintf(uiLine[2], sizeof(uiLine[2]), "РЕБ --");
+  }
+
+  uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
+  if (f != 0) {
+    snprintf(uiLine[3], sizeof(uiLine[3]), "%s", faultName(f));
+  } else if (bmsConnected) {
+    const char *lbl = (bmsCurrentA > RUNTIME_MIN_CURRENT_A)    ? "Заряд"
+                      : (bmsCurrentA < -RUNTIME_MIN_CURRENT_A) ? "Розряд"
+                                                               : "Спокій";
+    uint16_t rh;
+    uint8_t rm;
+    if (runtimeEstimate(&rh, &rm)) {
+      formatRuntime(buf, sizeof(buf), lbl, (float)rh + (float)rm / 60.0f);
+    } else {
+      formatRuntime(buf, sizeof(buf), lbl, -1.0f);
+    }
+    snprintf(uiLine[3], sizeof(uiLine[3]), "%s", buf);
+  } else {
+    uiLine[3][0] = 0;
+  }
+}
+
 void updateOled() {
   if (!oledPresent) return;
 
@@ -674,104 +768,21 @@ void updateOled() {
   unsigned long t0 = millis();
   oled.clearBuffer();
 
-#if OLED_CALIBRATION
-  // Вкладені рамки з кроком 4 px. Номер рамки — у її лівому верхньому куті.
-  // Повідомте, яка найбільша рамка видима ПОВНІСТЮ, з усіма чотирма сторонами.
-  const uint8_t w = oled.getDisplayWidth();
-  const uint8_t h = oled.getDisplayHeight();
-
-  // Сім рамок з кроком рівно 2 px: суцільна гребінка вздовж кожного краю.
-  // Найвнутрішніша (inset 12) напевно видима і служить опорою —
-  // рахуємо лінії назовні від неї окремо по кожній стороні.
-  for (uint8_t i = 0; i < 7; i++) {
-    uint8_t m = i * 2;
-    oled.drawFrame(m, m, w - 2 * m, h - 2 * m);
-  }
-
-  // Орієнтація: суцільний квадрат у куті 0,0 і стрілка вправо-вниз
-  oled.drawBox(0, 0, 5, 5);
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(20, 26, "TL");
-  oled.drawStr(20, 40, "pitch 2px");
-  oled.drawStr(20, 54, "7 lines");
-
-  // Опорні штрихи в центрі кожної сторони, всередині безпечної зони:
-  // по них видно, де середина краю, якщо кути зрізані
-  oled.drawVLine(w / 2, 14, 4);
-  oled.drawVLine(w / 2, h - 18, 4);
-  oled.drawHLine(14, h / 2, 4);
-  oled.drawHLine(w - 18, h / 2, 4);
-#else
   const uint8_t x0 = OLED_MARGIN_X;
   const uint8_t y0 = OLED_MARGIN_Y;
   const uint8_t w = oled.getDisplayWidth() - 2 * OLED_MARGIN_X;
-  // Кирилиця в UTF-8 по 2 байти: "Розряд 10г 20хв" це 24 байти плюс нуль,
-  // тож 24 замало і хвіст відрізався.
-  char buf[40];
 
   if (millis() < statusOverlayUntilMs) {
-    // Підтвердження після перемикання. Показуємо ФАКТИЧНИЙ стан ключа з BMS:
-    // якщо команда не дійшла, оператор має бачити правду, а не свій намір.
     const char *word = bmsActualDischargeState ? "Arming" : "Disarming";
     oled.setFont(u8g2_font_10x20_tr);
     uint8_t tw = oled.getStrWidth(word);
     oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
   } else {
-    // Чотири рядки в 52 px: шрифт 7x13 дає рівно 13 px на рядок
     oled.setFont(u8g2_font_7x13_t_cyrillic);
-
-    // 1: заряд власного акумулятора пульта
-    uint8_t pultPct = liPoPercent(remoteBatteryV);
-    snprintf(buf, sizeof(buf), "Пульт %u%% %.2fВ", (unsigned)pultPct,
-                                  remoteBatteryV);
-    oled.drawUTF8(x0, y0 + 11, buf);
-
-    // 2: час роботи пульта. Шунта в пульті немає, тому рахуємо за
-    //    ПРИЙНЯТИМ споживанням, а не виміряним.
-    const char *pultLbl = remoteCharging ? "Заряд" : "Розряд";
-    float pultH = -1.0f;
-    if (remoteRateValid && remoteRatePctPerH > RATE_MIN_PCT_PER_H) {
-      // Росте: скільки лишилось до 100 % при цій швидкості
-      pultH = (100.0f - (float)pultPct) / remoteRatePctPerH;
-    } else if (remoteRateValid && remoteRatePctPerH < -RATE_MIN_PCT_PER_H) {
-      // Падає: скільки лишилось до нуля
-      pultH = (float)pultPct / -remoteRatePctPerH;
-    } else if (!remoteCharging && remoteBatteryV > 0.0f) {
-      // Даних ще мало — поки що модель із прийнятого споживання
-      float mah = (float)PULT_CAPACITY_MAH * (float)pultPct / 100.0f;
-      pultH = mah / (float)PULT_TYPICAL_DRAW_MA;
-    }
-    formatRuntime(buf, sizeof(buf), pultLbl, pultH);
-    oled.drawUTF8(x0, y0 + 24, buf);
-
-    // 3: заряд батареї РЕБ і струм споживання
-    if (bmsConnected) {
-      snprintf(buf, sizeof(buf), "РЕБ %u%% %.1fA", (unsigned)bmsSocPercent,
-               bmsCurrentA);
-    } else {
-      snprintf(buf, sizeof(buf), "РЕБ --");
-    }
-    oled.drawUTF8(x0, y0 + 37, buf);
-
-    // 4: час роботи РЕБ, або назва аварії — вона важливіша за прогноз
-    uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
-    if (f != 0) {
-      oled.drawUTF8(x0, y0 + 50, faultName(f));
-    } else if (bmsConnected) {
-      const char *lbl = (bmsCurrentA > RUNTIME_MIN_CURRENT_A)    ? "Заряд"
-                        : (bmsCurrentA < -RUNTIME_MIN_CURRENT_A) ? "Розряд"
-                                                                 : "Спокій";
-      uint16_t rh;
-      uint8_t rm;
-      if (runtimeEstimate(&rh, &rm)) {
-        formatRuntime(buf, sizeof(buf), lbl, (float)rh + (float)rm / 60.0f);
-      } else {
-        formatRuntime(buf, sizeof(buf), lbl, -1.0f);
-      }
-      oled.drawUTF8(x0, y0 + 50, buf);
+    for (uint8_t i = 0; i < 4; i++) {
+      oled.drawUTF8(x0, y0 + 11 + i * 13, uiLine[i]);
     }
   }
-#endif
 
   oled.sendBuffer();
   unsigned long took = millis() - t0;
@@ -865,6 +876,124 @@ void updateRemoteBattery() {
 #endif
 }
 
+#if WIFI_AP_ENABLED
+static const char PAGE_HTML[] PROGMEM = R"HTMLPAGE(
+<!doctype html><html lang="uk"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пульт JK BMS</title><style>
+body{margin:0;background:#11171a;color:#e7edeb;
+font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;padding:18px}
+.wrap{max-width:420px;margin:0 auto}
+h1{font-size:17px;margin:0 0 16px;color:#85989d;font-weight:600;
+letter-spacing:.08em;text-transform:uppercase}
+.lamps{display:flex;gap:18px;justify-content:center;margin:0 0 20px}
+.lamp{width:62px;height:62px;border-radius:50%;background:#1b2427;
+border:2px solid #2a373b;transition:background .15s}
+.lamp.on.r{background:#d14026;box-shadow:0 0 22px #d1402688}
+.lamp.on.y{background:#d9a81c;box-shadow:0 0 22px #d9a81c88}
+.lamp.on.g{background:#2fa360;box-shadow:0 0 22px #2fa36088}
+.lamp.blink{animation:b .6s steps(1,end) infinite}
+@keyframes b{50%{background:#1b2427;box-shadow:none}}
+.rows{background:#161d20;border:1px solid #2a373b;border-radius:6px;
+padding:12px 14px;margin:0 0 18px}
+.rows div{font-family:ui-monospace,Consolas,monospace;font-size:16px;
+padding:3px 0}
+.ctl{background:#161d20;border:1px solid #2a373b;border-radius:6px;
+padding:14px}
+label{display:flex;align-items:center;gap:10px;cursor:pointer;
+margin:0 0 12px}
+input[type=checkbox]{width:20px;height:20px;accent-color:#d9a81c}
+button{width:100%;padding:14px;font-size:16px;font-weight:700;
+border:0;border-radius:6px;cursor:pointer;color:#11171a}
+button:disabled{opacity:.35;cursor:not-allowed}
+.arm{background:#2fa360}.disarm{background:#d14026;color:#fff}
+.hint{color:#85989d;font-size:13px;margin:10px 0 0}
+</style></head><body><div class="wrap">
+<h1>Пульт JK BMS</h1>
+<div class="lamps">
+<div id="lr" class="lamp r"></div>
+<div id="ly" class="lamp y"></div>
+<div id="lg" class="lamp g"></div></div>
+<div class="rows"><div id="r0"></div><div id="r1"></div>
+<div id="r2"></div><div id="r3"></div></div>
+<div class="ctl">
+<label><input type="checkbox" id="wc">
+<span>Керувати з браузера</span></label>
+<button id="bt" disabled></button>
+<p class="hint" id="hint"></p>
+</div></div><script>
+let dsg=0,web=0;
+function ap(j){
+for(let i=0;i<4;i++)document.getElementById("r"+i).textContent=j.l[i];
+const m={r:["lr",0],rb:["lr",1],y:["ly",0],g:["lg",0],gb:["lg",1]};
+["lr","ly","lg"].forEach(k=>{const e=document.getElementById(k);
+e.className="lamp "+k[1]});
+if(j.led=="nc"){["lr","ly","lg"].forEach(k=>{const e=
+document.getElementById(k);e.className="lamp "+k[1]+" on blink"})}
+else if(m[j.led]){const e=document.getElementById(m[j.led][0]);
+e.className="lamp "+m[j.led][0][1]+" on"+(m[j.led][1]?" blink":"")}
+dsg=j.dsg;web=j.web;
+document.getElementById("wc").checked=!!web;
+const b=document.getElementById("bt");
+b.disabled=!web;
+b.textContent=dsg?"Вимкнути розряд":"Увімкнути розряд";
+b.className=dsg?"disarm":"arm";
+document.getElementById("hint").textContent=web?
+"Тумблер ігнорується, поки галочка стоїть.":
+"Керує фізичний тумблер.";}
+function poll(){fetch("/api").then(r=>r.json()).then(ap).catch(()=>{})}
+document.getElementById("wc").onchange=e=>{
+fetch("/set?web="+(e.target.checked?1:0)).then(poll)};
+document.getElementById("bt").onclick=()=>{
+fetch("/set?dsg="+(dsg?0:1)).then(poll)};
+poll();setInterval(poll,1000);
+</script></body></html>
+)HTMLPAGE";
+
+void handleRoot() { server.send_P(200, "text/html; charset=utf-8", PAGE_HTML); }
+
+void handleApi() {
+  char js[420];
+  snprintf(js, sizeof(js),
+           "{\"l\":[\"%s\",\"%s\",\"%s\",\"%s\"],"
+           "\"led\":\"%s\",\"dsg\":%d,\"link\":%d,\"web\":%d}",
+           uiLine[0], uiLine[1], uiLine[2], uiLine[3], ledWeb,
+           bmsActualDischargeState ? 1 : 0, bmsConnected ? 1 : 0,
+           webControlEnabled ? 1 : 0);
+  server.send(200, "application/json; charset=utf-8", js);
+}
+
+void handleSet() {
+  if (server.hasArg("web")) {
+    webControlEnabled = (server.arg("web") == "1");
+    Serial.printf("WEB: control %s\n",
+                  webControlEnabled ? "taken by browser" : "back to switch");
+  }
+  // Команду приймаємо лише коли керування явно передане вебу.
+  if (server.hasArg("dsg") && webControlEnabled) {
+    applyDischargeCommand(server.arg("dsg") == "1", "web");
+  }
+  server.send(200, "text/plain", "ok");
+}
+
+void setupWifi() {
+  WiFi.mode(WIFI_AP);
+  // Нижча потужність: менше струму і менше помітності в ефірі.
+  WiFi.setTxPower(WIFI_POWER_11dBm);
+  apUp = WiFi.softAP(AP_SSID, AP_PASS, AP_CHANNEL, 0, AP_MAX_CLIENTS);
+  if (!apUp) {
+    Serial.println("WIFI: softAP failed, running without web");
+    return;
+  }
+  server.on("/", handleRoot);
+  server.on("/api", handleApi);
+  server.on("/set", handleSet);
+  server.begin();
+  Serial.printf("WIFI: AP \"%s\" up at %s\n", AP_SSID,
+                WiFi.softAPIP().toString().c_str());
+}
+#endif
+
 void setup() {
   Serial.begin(115200);
   delay(2000); // час хосту підхопити USB CDC після скидання
@@ -880,6 +1009,9 @@ void setup() {
   Serial1.begin(115200, SERIAL_8N1, BMS_RX_PIN, BMS_TX_PIN);
   Serial.println("Serial1 up");
   setupOled();
+#if WIFI_AP_ENABLED
+  setupWifi();
+#endif
   Serial.println("setup() done");
   Serial.printf("Serial1 initialized: RX=GPIO%d, TX=GPIO%d\n", BMS_RX_PIN,
                 BMS_TX_PIN);
@@ -892,11 +1024,20 @@ void setup() {
 }
 
 void loop() {
+#if WIFI_AP_ENABLED
+  if (apUp) server.handleClient();
+#endif
   processBmsResponses();
 
   updateHeartbeat();
   updateLedIndicators();
   updateRemoteBattery();
+
+  static unsigned long lastUiMs = 0;
+  if (millis() - lastUiMs >= 250) {
+    lastUiMs = millis();
+    buildUiLines();
+  }
   updateOled();
 
   bool raw = (digitalRead(PIN_BUTTON) == BUTTON_ACTIVE_LEVEL);
@@ -907,14 +1048,23 @@ void loop() {
     lastEdgeMs = now;
   }
 
-  if ((now - lastEdgeMs) >= DEBOUNCE_MS && raw != targetDischargeState) {
-    targetDischargeState = raw;
-    statusOverlayUntilMs = now + STATUS_OVERLAY_MS;
-    Serial.printf(">>> SWITCH TOGGLED! Target Discharge State = %s <<<\n",
-                  targetDischargeState ? "ON" : "OFF");
-    jkWriteRegister(REG_DISCHARGE_SW, targetDischargeState ? 0x01 : 0x00);
-    lastWriteRetryMs = now;
+  // Положення тумблера відстежуємо завжди, щоб знати його навіть тоді,
+  // коли керує веб: при поверненні керування треба буде до нього прийти.
+  bool switchMoved = false;
+  if ((now - lastEdgeMs) >= DEBOUNCE_MS && raw != lastStablePressed) {
+    lastStablePressed = raw;
+    switchMoved = true;
   }
+
+  if (!webControlEnabled) {
+    // Звичайний режим: ключ повторює положення тумблера. Сюди ж
+    // потрапляємо одразу після зняття галочки — і стан вирівнюється
+    // по тумблеру, без окремої обробки.
+    if (switchMoved || targetDischargeState != lastStablePressed) {
+      applyDischargeCommand(lastStablePressed, "switch");
+    }
+  }
+  // Якщо керує веб — тумблер лише відстежуємо, команд з нього не беремо.
 
   // АВТОМАТИЧНИЙ ПОВТОР (RETRY):
   // Якщо реальний стан BMS НЕ відповідає положенню тумблера — повертаємо команду кожні 300 мс до підтвердження!
