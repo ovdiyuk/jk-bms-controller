@@ -704,7 +704,8 @@ void updateOled() {
 
     // 1: заряд власного акумулятора пульта
     uint8_t pultPct = liPoPercent(remoteBatteryV);
-    snprintf(buf, sizeof(buf), "Пульт %u%%", (unsigned)pultPct);
+    snprintf(buf, sizeof(buf), "Пульт %u%% %.2fВ", (unsigned)pultPct,
+                                  remoteBatteryV);
     oled.drawUTF8(x0, y0 + 11, buf);
 
     // 2: час роботи пульта. Шунта в пульті немає, тому рахуємо за
