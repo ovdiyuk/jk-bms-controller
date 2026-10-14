@@ -126,9 +126,18 @@ const float STEP_THRESHOLD_V = 0.050f;
 // Швидкість зміни заряду. Вікно росте до 5 хв, потім опорна точка
 // зсувається. Коротше вікно потонуло б у шумі: 2 мВ шуму на крутому
 // місці кривої — це вже 0.3 % заряду.
-const unsigned long RATE_WINDOW_MS = 300000;
+// Ковзне вікно: тримаємо 10 зразків по одному на 30 с, тобто 5 хвилин.
+// Раніше опорна точка скидалася раз на вікно, і в цей момент швидкість
+// стрибала — саме це й виглядало як девіація.
+const uint8_t RATE_SLOTS = 10;
+const unsigned long RATE_SAMPLE_MS = 30000;
 const unsigned long RATE_MIN_SPAN_MS = 60000; // раніше хвилини не рахуємо
 const float RATE_MIN_PCT_PER_H = 1.0f;        // нижче — вважаємо спокоєм
+
+// Поверх вікна — ковзне середнє швидкості по 5 оцінках. Усереднюємо саме
+// швидкість, а не час: час це залишок/швидкість, і біля нуля він злітає
+// в сотні годин, чим зіпсував би середнє.
+const uint8_t RATE_AVG_SLOTS = 5;
 
 const unsigned long TREND_WINDOW_MS = 180000;
 const float TREND_THRESHOLD_V = 0.005f;
@@ -867,44 +876,63 @@ void updateRemoteBattery() {
 
   // Швидкість зміни заряду. Струм для цього не потрібен: відсоток ми
   // вже рахуємо з кривої, час знаємо, отже похідна спостережна.
-  // З неї ж виходить і час до повного, і час до порожнього.
   {
     uint8_t pctNow = liPoPercent(remoteBatteryV);
-    static uint8_t pctRef = 0;
-    static unsigned long pctRefMs = 0;
     unsigned long nowMs = millis();
 
-    // Підключення або відєднання зарядки — це зовнішня дія, а не заряд.
-    // Якщо лишити її в похідній, перепад у 230 мВ дасть фантастичну
-    // швидкість. Тому після стрибка починаємо відлік заново.
+    static uint8_t histPct[RATE_SLOTS];
+    static unsigned long histMs[RATE_SLOTS];
+    static uint8_t histCount = 0, histHead = 0;
+    static unsigned long lastPushMs = 0;
+    static float rateRing[RATE_AVG_SLOTS];
+    static uint8_t rateCount = 0, rateHead = 0;
+
+    // Підключення або відєднання зарядки — зовнішня дія, а не заряд.
+    // Історію після неї треба починати заново, інакше перепад у 230 мВ
+    // дасть фантастичну швидкість.
     if (stepSeen) {
-      pctRef = pctNow;
-      pctRefMs = nowMs;
+      histCount = histHead = 0;
+      rateCount = rateHead = 0;
+      lastPushMs = 0;
       remoteRateValid = false;
       remoteRatePctPerH = 0.0f;
-    } else if (pctRefMs == 0) {
-      pctRef = pctNow;
-      pctRefMs = nowMs;
-    } else {
-      unsigned long span = nowMs - pctRefMs;
-      if (span >= RATE_MIN_SPAN_MS) {
-        float hours = (float)span / 3600000.0f;
-        remoteRatePctPerH = ((float)pctNow - (float)pctRef) / hours;
-        remoteRateValid = true;
+    }
 
-        // Знак швидкості — найнадійніша ознака напрямку. На відміну від
-        // стрибка, працює й тоді, коли пульт увімкнули з уже підключеною
-        // зарядкою і фронту не було.
-        if (remoteRatePctPerH > RATE_MIN_PCT_PER_H) remoteCharging = true;
-        else if (remoteRatePctPerH < -RATE_MIN_PCT_PER_H) remoteCharging = false;
-      }
-      if (span >= RATE_WINDOW_MS) {
-        pctRef = pctNow;
-        pctRefMs = nowMs;
+    if (lastPushMs == 0 || nowMs - lastPushMs >= RATE_SAMPLE_MS) {
+      lastPushMs = nowMs;
+      histPct[histHead] = pctNow;
+      histMs[histHead] = nowMs;
+      histHead = (uint8_t)((histHead + 1) % RATE_SLOTS);
+      if (histCount < RATE_SLOTS) histCount++;
+
+      // Найстаріший зразок у вікні. Вікно ковзає, тож швидкість міняється
+      // плавно, без стрибка на межі.
+      if (histCount >= 2) {
+        uint8_t oldest =
+            (uint8_t)((histHead + RATE_SLOTS - histCount) % RATE_SLOTS);
+        unsigned long span = nowMs - histMs[oldest];
+        if (span >= RATE_MIN_SPAN_MS) {
+          float hours = (float)span / 3600000.0f;
+          float raw = ((float)pctNow - (float)histPct[oldest]) / hours;
+
+          rateRing[rateHead] = raw;
+          rateHead = (uint8_t)((rateHead + 1) % RATE_AVG_SLOTS);
+          if (rateCount < RATE_AVG_SLOTS) rateCount++;
+
+          float sum = 0.0f;
+          for (uint8_t i = 0; i < rateCount; i++) sum += rateRing[i];
+          remoteRatePctPerH = sum / (float)rateCount;
+          remoteRateValid = true;
+
+          // Знак усередненої швидкості — ознака напрямку. Працює й тоді,
+          // коли пульт увімкнули з уже підключеною зарядкою.
+          if (remoteRatePctPerH > RATE_MIN_PCT_PER_H) remoteCharging = true;
+          else if (remoteRatePctPerH < -RATE_MIN_PCT_PER_H)
+            remoteCharging = false;
+        }
       }
     }
   }
-
 #if PULT_CHARGE_PIN_ENABLED
   // Апаратний сигнал має пріоритет над здогадкою: CHRG у нулі = йде заряд
   remoteCharging = (digitalRead(PIN_PULT_CHARGE) == LOW);
