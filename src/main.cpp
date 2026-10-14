@@ -96,6 +96,13 @@ const float STEP_THRESHOLD_V = 0.050f;
 
 // Повільний тренд лишається запасним варіантом: він ловить випадок,
 // коли пульт увімкнули з уже підключеною зарядкою і стрибка не було.
+// Швидкість зміни заряду. Вікно росте до 5 хв, потім опорна точка
+// зсувається. Коротше вікно потонуло б у шумі: 2 мВ шуму на крутому
+// місці кривої — це вже 0.3 % заряду.
+const unsigned long RATE_WINDOW_MS = 300000;
+const unsigned long RATE_MIN_SPAN_MS = 60000; // раніше хвилини не рахуємо
+const float RATE_MIN_PCT_PER_H = 1.0f;        // нижче — вважаємо спокоєм
+
 const unsigned long TREND_WINDOW_MS = 180000;
 const float TREND_THRESHOLD_V = 0.005f;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
@@ -137,7 +144,9 @@ float bmsCapacityAh = 0.0f;        // Ємність збірки, тег 0xAA
 float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
 uint32_t remoteBatteryRawMv = 0;   // Сире значення на піні, для діагностики
 unsigned long statusOverlayUntilMs = 0; // До якого моменту показувати ARM/DISARM
-bool remoteCharging = false;       // Визначається за трендом напруги
+bool remoteCharging = false;       // Визначається за стрибком напруги
+float remoteRatePctPerH = 0.0f;    // Швидкість зміни заряду пульта, %/год
+bool remoteRateValid = false;      // Чи накопичилось даних для оцінки
 
 // Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
@@ -516,12 +525,13 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV, %s) | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
             bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
             oledPresent ? "ok" : "--", remoteBatteryV,
             (unsigned long)remoteBatteryRawMv,
-            remoteCharging ? "zaryad" : "rozryad", ledState);
+            remoteCharging ? "zaryad" : "rozryad",
+            remoteRateValid ? remoteRatePctPerH : 0.0f, ledState);
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -695,7 +705,9 @@ void updateOled() {
   const uint8_t x0 = OLED_MARGIN_X;
   const uint8_t y0 = OLED_MARGIN_Y;
   const uint8_t w = oled.getDisplayWidth() - 2 * OLED_MARGIN_X;
-  char buf[24];
+  // Кирилиця в UTF-8 по 2 байти: "Розряд 10г 20хв" це 24 байти плюс нуль,
+  // тож 24 замало і хвіст відрізався.
+  char buf[40];
 
   if (millis() < statusOverlayUntilMs) {
     // Підтвердження після перемикання. Показуємо ФАКТИЧНИЙ стан ключа з BMS:
@@ -716,16 +728,20 @@ void updateOled() {
 
     // 2: час роботи пульта. Шунта в пульті немає, тому рахуємо за
     //    ПРИЙНЯТИМ споживанням, а не виміряним.
-    if (remoteCharging) {
-      // Струм зарядного модуля нам невідомий, тому час не вигадуємо
-      formatRuntime(buf, sizeof(buf), "Заряд", -1.0f);
-    } else if (remoteBatteryV > 0.0f) {
+    const char *pultLbl = remoteCharging ? "Заряд" : "Розряд";
+    float pultH = -1.0f;
+    if (remoteRateValid && remoteRatePctPerH > RATE_MIN_PCT_PER_H) {
+      // Росте: скільки лишилось до 100 % при цій швидкості
+      pultH = (100.0f - (float)pultPct) / remoteRatePctPerH;
+    } else if (remoteRateValid && remoteRatePctPerH < -RATE_MIN_PCT_PER_H) {
+      // Падає: скільки лишилось до нуля
+      pultH = (float)pultPct / -remoteRatePctPerH;
+    } else if (!remoteCharging && remoteBatteryV > 0.0f) {
+      // Даних ще мало — поки що модель із прийнятого споживання
       float mah = (float)PULT_CAPACITY_MAH * (float)pultPct / 100.0f;
-      formatRuntime(buf, sizeof(buf), "Розряд",
-                    mah / (float)PULT_TYPICAL_DRAW_MA);
-    } else {
-      formatRuntime(buf, sizeof(buf), "Розряд", -1.0f);
+      pultH = mah / (float)PULT_TYPICAL_DRAW_MA;
     }
+    formatRuntime(buf, sizeof(buf), pultLbl, pultH);
     oled.drawUTF8(x0, y0 + 24, buf);
 
     // 3: заряд батареї РЕБ і струм споживання
@@ -790,26 +806,57 @@ void updateRemoteBattery() {
   // Головний детектор: стрибок між сусідніми вимірами. Підключення або
   // відєднання зарядки видно одразу, за один період.
   static float prevV = 0.0f;
+  bool stepSeen = false;
   if (prevV > 0.0f) {
     float step = remoteBatteryV - prevV;
-    if (step > STEP_THRESHOLD_V) remoteCharging = true;
-    else if (step < -STEP_THRESHOLD_V) remoteCharging = false;
+    if (step > STEP_THRESHOLD_V) {
+      remoteCharging = true;
+      stepSeen = true;
+    } else if (step < -STEP_THRESHOLD_V) {
+      remoteCharging = false;
+      stepSeen = true;
+    }
   }
   prevV = remoteBatteryV;
 
-  // Запасний повільний тренд — на випадок, коли стрибка не було:
-  // пульт увімкнули вже з підключеною зарядкою.
-  static float trendRefV = 0.0f;
-  static unsigned long trendRefMs = 0;
-  if (trendRefMs == 0) {
-    trendRefV = remoteBatteryV;
-    trendRefMs = millis();
-  } else if (millis() - trendRefMs >= TREND_WINDOW_MS) {
-    float delta = remoteBatteryV - trendRefV;
-    if (delta > TREND_THRESHOLD_V) remoteCharging = true;
-    else if (delta < -TREND_THRESHOLD_V) remoteCharging = false;
-    trendRefV = remoteBatteryV;
-    trendRefMs = millis();
+  // Швидкість зміни заряду. Струм для цього не потрібен: відсоток ми
+  // вже рахуємо з кривої, час знаємо, отже похідна спостережна.
+  // З неї ж виходить і час до повного, і час до порожнього.
+  {
+    uint8_t pctNow = liPoPercent(remoteBatteryV);
+    static uint8_t pctRef = 0;
+    static unsigned long pctRefMs = 0;
+    unsigned long nowMs = millis();
+
+    // Підключення або відєднання зарядки — це зовнішня дія, а не заряд.
+    // Якщо лишити її в похідній, перепад у 230 мВ дасть фантастичну
+    // швидкість. Тому після стрибка починаємо відлік заново.
+    if (stepSeen) {
+      pctRef = pctNow;
+      pctRefMs = nowMs;
+      remoteRateValid = false;
+      remoteRatePctPerH = 0.0f;
+    } else if (pctRefMs == 0) {
+      pctRef = pctNow;
+      pctRefMs = nowMs;
+    } else {
+      unsigned long span = nowMs - pctRefMs;
+      if (span >= RATE_MIN_SPAN_MS) {
+        float hours = (float)span / 3600000.0f;
+        remoteRatePctPerH = ((float)pctNow - (float)pctRef) / hours;
+        remoteRateValid = true;
+
+        // Знак швидкості — найнадійніша ознака напрямку. На відміну від
+        // стрибка, працює й тоді, коли пульт увімкнули з уже підключеною
+        // зарядкою і фронту не було.
+        if (remoteRatePctPerH > RATE_MIN_PCT_PER_H) remoteCharging = true;
+        else if (remoteRatePctPerH < -RATE_MIN_PCT_PER_H) remoteCharging = false;
+      }
+      if (span >= RATE_WINDOW_MS) {
+        pctRef = pctNow;
+        pctRefMs = nowMs;
+      }
+    }
   }
 
 #if PULT_CHARGE_PIN_ENABLED
