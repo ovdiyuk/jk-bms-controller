@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <esp_system.h>
 #include <U8g2lib.h>
 #include <Wire.h>
 
@@ -42,6 +43,16 @@ const uint8_t OLED_SDA_PIN = 10;
 const uint8_t OLED_SCL_PIN = 20;
 const uint32_t OLED_I2C_HZ = 400000;
 const unsigned long OLED_REFRESH_MS = 250;
+
+// Калібрування видимої області: корпус вужчий за скло дисплея.
+// 1 — малюємо вкладені рамки замість даних, щоб визначити поля.
+#define OLED_CALIBRATION 0
+
+// Поля безпечної області в пікселях (уточнюються за фото калібрування).
+// Бортик корпусу зрізає край скла нерівномірно, близько 1-4 px.
+// Беремо 6 px з запасом: робоча область 116 x 52.
+const uint8_t OLED_MARGIN_X = 6;
+const uint8_t OLED_MARGIN_Y = 6;
 const unsigned long OLED_RENDER_BUDGET_MS = 120; // довше - вважаємо шину завислою
 const uint8_t OLED_MAX_FAILS = 5;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
@@ -80,7 +91,8 @@ bool bmsConnected = false;          // Прапорець наявності з�
 const char *ledState = "?";        // Поточний стан індикатора, для логу
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
 
-U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE); // R0 = bez povorotu
+// Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
+U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
 bool oledPresent = false;          // Чи відгукнувся дисплей на шині
 uint8_t oledFailCount = 0;         // Поспіль невдалих/задовгих оновлень
 
@@ -520,6 +532,41 @@ void updateOled() {
   if (millis() - lastDrawMs < OLED_REFRESH_MS) return;
   lastDrawMs = millis();
 
+  unsigned long t0 = millis();
+  oled.clearBuffer();
+
+#if OLED_CALIBRATION
+  // Вкладені рамки з кроком 4 px. Номер рамки — у її лівому верхньому куті.
+  // Повідомте, яка найбільша рамка видима ПОВНІСТЮ, з усіма чотирма сторонами.
+  const uint8_t w = oled.getDisplayWidth();
+  const uint8_t h = oled.getDisplayHeight();
+
+  // Сім рамок з кроком рівно 2 px: суцільна гребінка вздовж кожного краю.
+  // Найвнутрішніша (inset 12) напевно видима і служить опорою —
+  // рахуємо лінії назовні від неї окремо по кожній стороні.
+  for (uint8_t i = 0; i < 7; i++) {
+    uint8_t m = i * 2;
+    oled.drawFrame(m, m, w - 2 * m, h - 2 * m);
+  }
+
+  // Орієнтація: суцільний квадрат у куті 0,0 і стрілка вправо-вниз
+  oled.drawBox(0, 0, 5, 5);
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(20, 26, "TL");
+  oled.drawStr(20, 40, "pitch 2px");
+  oled.drawStr(20, 54, "7 lines");
+
+  // Опорні штрихи в центрі кожної сторони, всередині безпечної зони:
+  // по них видно, де середина краю, якщо кути зрізані
+  oled.drawVLine(w / 2, 14, 4);
+  oled.drawVLine(w / 2, h - 18, 4);
+  oled.drawHLine(14, h / 2, 4);
+  oled.drawHLine(w - 18, h / 2, 4);
+#else
+  const uint8_t x0 = OLED_MARGIN_X;
+  const uint8_t y0 = OLED_MARGIN_Y;
+  const uint8_t w = oled.getDisplayWidth() - 2 * OLED_MARGIN_X;
+
   char buf[16];
   if (bmsConnected) {
     snprintf(buf, sizeof(buf), "%.2f", bmsPackVoltageV);
@@ -527,16 +574,19 @@ void updateOled() {
     snprintf(buf, sizeof(buf), "--.--");
   }
 
-  unsigned long t0 = millis();
-  oled.clearBuffer();
   oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(0, 10, "PACK");
+  oled.drawStr(x0, y0 + 9, "PACK");
+
+  // Велике число притиснуте до лівого краю безпечної області,
+  // "V" — до правого, щоб нерівний зріз не з'їв ні того, ні іншого.
   oled.setFont(u8g2_font_logisoso32_tn);
-  oled.drawStr(0, 50, buf);
+  oled.drawStr(x0, y0 + 46, buf);
+
   oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(104, 50, "V");
-  oled.sendBuffer();
-  unsigned long took = millis() - t0;
+  oled.drawStr(x0 + w - 6, y0 + 46, "V");
+#endif
+
+  oled.sendBuffer();  unsigned long took = millis() - t0;
 
   // Захист від зависання шини: не мовчимо, але й не тягнемо цикл за собою
   if (took > OLED_RENDER_BUDGET_MS) {
@@ -552,11 +602,11 @@ void updateOled() {
 }
 
 void setup() {
+  Serial.begin(115200);
+  delay(2000); // час хосту підхопити USB CDC після скидання
   pinMode(PIN_BUTTON, INPUT_PULLDOWN); // switch pulls the pin UP to 3.3 V
   setupLeds();
 
-  Serial.begin(115200);
-  delay(1500); // час хосту підхопити USB CDC, інакше стартовий лог губиться
   Serial.println();
   Serial.println("JK BMS controller starting");
   Serial1.begin(115200, SERIAL_8N1, BMS_RX_PIN, BMS_TX_PIN);
