@@ -697,16 +697,25 @@ void formatRuntime(char *out, size_t n, const char *label, float h) {
   snprintf(out, n, "%s %uг %02uхв", label, (unsigned)hh, (unsigned)mm);
 }
 
-// Назва аварії одним словом, під коди з determineActiveFaultCode()
-const char *faultName(uint8_t code) {
+// Текст аварії: назва плюс значення, що її викликало. Без числа напис
+// каже лише "щось не так", а оператору треба знати наскільки.
+// Рядок має вкладатись у 16 символів — стільки тримає шрифт 7x13.
+void faultText(uint8_t code, char *out, size_t n) {
   switch (code) {
-    case 1: return "Напруга комірки";
-    case 2: return "Струм";
-    case 3: return "Температура";
-    case 4: return "MOSFET";
-    case 5: return "КЗ";
-    case 6: return "Баланс";
-    default: return "";
+    case 1: {
+      // Показуємо ту межу, яку пробито: занизьку чи зависоку
+      float v = (bmsMinCellV < 2.60f) ? bmsMinCellV : bmsMaxCellV;
+      snprintf(out, n, "Комірка %.2fВ", v);
+      break;
+    }
+    case 2: snprintf(out, n, "Струм %.0fA", fabs(bmsCurrentA)); break;
+    case 3: snprintf(out, n, "Температура %.0fC", bmsTempC); break;
+    case 4: snprintf(out, n, "MOSFET %.0fC", bmsTempC); break;
+    case 5: snprintf(out, n, "КЗ %.0fA", fabs(bmsCurrentA)); break;
+    case 6:
+      snprintf(out, n, "Баланс %.0fмВ", bmsCellDeltaV * 1000.0f);
+      break;
+    default: out[0] = 0; break;
   }
 }
 
@@ -749,7 +758,7 @@ void buildUiLines() {
 
   uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
   if (f != 0) {
-    snprintf(uiLine[3], sizeof(uiLine[3]), "%s", faultName(f));
+    faultText(f, uiLine[3], sizeof(uiLine[3]));
   } else if (bmsConnected) {
     const char *lbl = (bmsCurrentA > RUNTIME_MIN_CURRENT_A)    ? "Заряд"
                       : (bmsCurrentA < -RUNTIME_MIN_CURRENT_A) ? "Розряд"
