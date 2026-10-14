@@ -90,9 +90,11 @@ ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем
   <line x1="880" y1="344" x2="1130" y2="344" stroke="#14191B" stroke-width="1.6"/>
   <text x="1005" y="331" text-anchor="middle" font-size="17" font-weight="700" fill="#14191B">ESP32-C3 Super Mini</text>
   <text x="890" y="385" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8">5V</text>
-  <text x="890" y="435" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">3V3</text>
-  <text x="890" y="505" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#14191B">GPIO1</text>
-  <text x="890" y="585" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
+  <text x="890" y="425" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">3V3</text>
+  <text x="890" y="465" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#14191B">GPIO1</text>
+  <text x="890" y="510" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO10</text>
+  <text x="890" y="550" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO20</text>
+  <text x="890" y="595" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
   <text x="1120" y="395" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO4</text>
   <text x="1120" y="445" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1B7860">GPIO3</text>
   <text x="1120" y="495" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
@@ -102,22 +104,48 @@ ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем
   <text x="1005" y="563" text-anchor="middle" font-size="13" fill="#6B7C83">Serial1 · 115200 8N1</text>
 
   <!-- ESP32 ground (battery return) -->
-  <line x1="880" y1="580" x2="830" y2="580" stroke="#14191B" stroke-width="2"/>
-  <line x1="830" y1="580" x2="830" y2="606" stroke="#14191B" stroke-width="2"/>
+  <line x1="880" y1="590" x2="380" y2="590" stroke="#14191B" stroke-width="2"/>
+  <circle cx="830" cy="590" r="4" fill="#14191B"/>
+  <line x1="830" y1="590" x2="830" y2="606" stroke="#14191B" stroke-width="2"/>
   <line x1="807" y1="606" x2="853" y2="606" stroke="#14191B" stroke-width="2.4"/>
   <line x1="816" y1="615" x2="844" y2="615" stroke="#14191B" stroke-width="2.4"/>
   <line x1="824" y1="624" x2="836" y2="624" stroke="#14191B" stroke-width="2.4"/>
 
   <!-- ===================== перемикач РЕБ ===================== -->
-  <line x1="880" y1="430" x2="760" y2="430" stroke="#14191B" stroke-width="2"/>
-  <line x1="760" y1="430" x2="760" y2="500" stroke="#14191B" stroke-width="2"/>
-  <circle cx="764" cy="500" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
-  <line x1="767" y1="497" x2="806" y2="476" stroke="#14191B" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="810" cy="500" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
-  <line x1="814" y1="500" x2="880" y2="500" stroke="#14191B" stroke-width="2"/>
-  <text x="700" y="540" font-size="14" font-weight="700" fill="#14191B">перемикач РЕБ</text>
-  <text x="700" y="558" font-size="12.5" fill="#6B7C83">замкнено = розряд УВІМК</text>
-  <text x="700" y="576" font-size="12.5" fill="#6B7C83">INPUT_PULLDOWN, активний HIGH</text>
+  <line x1="880" y1="420" x2="380" y2="420" stroke="#14191B" stroke-width="2"/>
+  <circle cx="700" cy="420" r="4" fill="#14191B"/>
+  <line x1="700" y1="420" x2="700" y2="460" stroke="#14191B" stroke-width="2"/>
+  <circle cx="704" cy="460" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
+  <line x1="707" y1="457" x2="745" y2="440" stroke="#14191B" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="749" cy="460" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
+  <line x1="753" y1="460" x2="880" y2="460" stroke="#14191B" stroke-width="2"/>
+  <text x="790" y="406" text-anchor="middle" font-size="14" font-weight="700" fill="#14191B">перемикач РЕБ</text>
+  <text x="690" y="448" text-anchor="end" font-size="12.5" fill="#6B7C83">замкнено = розряд УВІМК</text>
+  <text x="690" y="466" text-anchor="end" font-size="12.5" fill="#6B7C83">INPUT_PULLDOWN, активний HIGH</text>
+
+  <!-- ===================== OLED ===================== -->
+  <line x1="880" y1="505" x2="380" y2="505" stroke="#1C5F90" stroke-width="2"/>
+  <line x1="880" y1="545" x2="380" y2="545" stroke="#1C5F90" stroke-width="2"/>
+  <text x="500" y="412" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#6B7C83">3.3 V</text>
+  <text x="500" y="497" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#1C5F90">SDA</text>
+  <text x="500" y="537" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#1C5F90">SCL</text>
+  <text x="500" y="582" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#6B7C83">GND</text>
+
+  <rect x="60" y="356" width="320" height="274" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="60" y1="400" x2="380" y2="400" stroke="#14191B" stroke-width="1.6"/>
+  <text x="220" y="387" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">OLED 1.3&#8243; SH1106</text>
+  <text x="370" y="425" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">VCC</text>
+  <text x="370" y="510" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">SDA</text>
+  <text x="370" y="550" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">SCL</text>
+  <text x="370" y="595" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
+  <text x="76" y="432" font-size="13" fill="#6B7C83">128 × 64, I²C, адреса 0x3C</text>
+  <text x="76" y="452" font-size="13" fill="#6B7C83">показує напругу збірки</text>
+  <text x="76" y="472" font-size="13" fill="#6B7C83">оновлення 4 рази на секунду</text>
+  <text x="76" y="508" font-size="12.5" font-weight="700" fill="#A03A1E">контролер SH1106, не SSD1306:</text>
+  <text x="76" y="526" font-size="12.5" fill="#A03A1E">драйвер SSD1306 дає зсув на 2 px</text>
+  <text x="76" y="562" font-size="12.5" fill="#6B7C83">не обов’язковий: якщо не відповів</text>
+  <text x="76" y="580" font-size="12.5" fill="#6B7C83">або завис — керування працює далі</text>
+  <text x="76" y="612" font-size="12.5" fill="#6B7C83">живиться з 3V3 плати, ~15–25 мА</text>
 
   <!-- ===================== індикатор ===================== -->
   <line x1="900" y1="630" x2="900" y2="772" stroke="#D14026" stroke-width="1.8"/>
@@ -249,4 +277,91 @@ ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем
 
   <text x="52" y="1243" font-size="12.5" fill="#6B7C83">Стан береться з фактичного положення ключа, що повідомляє BMS, а не з положення перемикача.</text>
 
+
+
+  <!-- ===================== РОЗПІНОВКА ===================== -->
+  <rect x="30" y="645" width="740" height="217" rx="5" fill="#F6F9F8" stroke="#D2DBD9" stroke-width="1.4"/>
+  <text x="400" y="670" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13.5" letter-spacing="1.5" fill="#6B7C83">ESP32-C3 SUPER MINI — УСІ ВИВЕДЕНІ ПІНИ</text>
+  <rect x="392" y="680" width="66" height="172" rx="4" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <rect x="408" y="672" width="34" height="14" rx="3" fill="#FFFFFF" stroke="#14191B" stroke-width="1.5"/>
+  <rect x="302" y="678" width="80" height="19" rx="4" fill="#D14026" stroke="#D14026" stroke-width="1.4"/>
+  <text x="342" y="692" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO5</text>
+  <line x1="382" y1="687" x2="392" y2="687" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="687" r="3.2" fill="#14191B"/>
+  <text x="292" y="692" text-anchor="end" font-size="12.5" fill="#3B4A50">ЧЕРВОНИЙ — аварії</text>
+  <rect x="302" y="700" width="80" height="19" rx="4" fill="#B8900F" stroke="#B8900F" stroke-width="1.4"/>
+  <text x="342" y="714" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO6</text>
+  <line x1="382" y1="709" x2="392" y2="709" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="709" r="3.2" fill="#14191B"/>
+  <text x="292" y="714" text-anchor="end" font-size="12.5" fill="#3B4A50">ЖОВТИЙ — готова</text>
+  <rect x="302" y="722" width="80" height="19" rx="4" fill="#2FA360" stroke="#2FA360" stroke-width="1.4"/>
+  <text x="342" y="736" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO7</text>
+  <line x1="382" y1="731" x2="392" y2="731" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="731" r="3.2" fill="#14191B"/>
+  <text x="292" y="736" text-anchor="end" font-size="12.5" fill="#3B4A50">ЗЕЛЕНИЙ — працює</text>
+  <rect x="302" y="744" width="80" height="19" rx="4" fill="#6B7C83" stroke="#6B7C83" stroke-width="1.4"/>
+  <text x="342" y="758" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO8</text>
+  <line x1="382" y1="753" x2="392" y2="753" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="753" r="3.2" fill="#14191B"/>
+  <text x="292" y="758" text-anchor="end" font-size="12.5" fill="#3B4A50">вбудований LED, heartbeat</text>
+  <rect x="302" y="766" width="80" height="19" rx="4" fill="#FFFFFF" stroke="#B9C6C4" stroke-width="1.4"/>
+  <text x="342" y="780" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#6B7C83">GPIO9</text>
+  <line x1="382" y1="775" x2="392" y2="775" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="775" r="3.2" fill="#14191B"/>
+  <text x="292" y="780" text-anchor="end" font-size="12.5" fill="#3B4A50">BOOT, strapping — не чіпати</text>
+  <rect x="302" y="788" width="80" height="19" rx="4" fill="#1C5F90" stroke="#1C5F90" stroke-width="1.4"/>
+  <text x="342" y="802" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO10</text>
+  <line x1="382" y1="797" x2="392" y2="797" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="797" r="3.2" fill="#14191B"/>
+  <text x="292" y="802" text-anchor="end" font-size="12.5" fill="#3B4A50">SDA → OLED</text>
+  <rect x="302" y="810" width="80" height="19" rx="4" fill="#1C5F90" stroke="#1C5F90" stroke-width="1.4"/>
+  <text x="342" y="824" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO20</text>
+  <line x1="382" y1="819" x2="392" y2="819" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="819" r="3.2" fill="#14191B"/>
+  <text x="292" y="824" text-anchor="end" font-size="12.5" fill="#3B4A50">SCL → OLED</text>
+  <rect x="302" y="832" width="80" height="19" rx="4" fill="#FFFFFF" stroke="#B9C6C4" stroke-width="1.4"/>
+  <text x="342" y="846" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#6B7C83">GPIO21</text>
+  <line x1="382" y1="841" x2="392" y2="841" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="398" cy="841" r="3.2" fill="#14191B"/>
+  <text x="292" y="846" text-anchor="end" font-size="12.5" fill="#3B4A50">вільний · U0TXD</text>
+  <rect x="468" y="678" width="80" height="19" rx="4" fill="#7A4FA8" stroke="#7A4FA8" stroke-width="1.4"/>
+  <text x="508" y="692" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">5V</text>
+  <line x1="458" y1="687" x2="468" y2="687" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="687" r="3.2" fill="#14191B"/>
+  <text x="558" y="692" font-size="12.5" fill="#3B4A50">від DC-DC 5 V</text>
+  <rect x="468" y="700" width="80" height="19" rx="4" fill="#7A4FA8" stroke="#7A4FA8" stroke-width="1.4"/>
+  <text x="508" y="714" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GND</text>
+  <line x1="458" y1="709" x2="468" y2="709" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="709" r="3.2" fill="#14191B"/>
+  <text x="558" y="714" font-size="12.5" fill="#3B4A50">спільна земля пульта</text>
+  <rect x="468" y="722" width="80" height="19" rx="4" fill="#7A4FA8" stroke="#7A4FA8" stroke-width="1.4"/>
+  <text x="508" y="736" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">3V3</text>
+  <line x1="458" y1="731" x2="468" y2="731" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="731" r="3.2" fill="#14191B"/>
+  <text x="558" y="736" font-size="12.5" fill="#3B4A50">→ OLED VCC, перемикач</text>
+  <rect x="468" y="744" width="80" height="19" rx="4" fill="#1C5F90" stroke="#1C5F90" stroke-width="1.4"/>
+  <text x="508" y="758" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO4</text>
+  <line x1="458" y1="753" x2="468" y2="753" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="753" r="3.2" fill="#14191B"/>
+  <text x="558" y="758" font-size="12.5" fill="#3B4A50">TX → RX1 оптомодуля</text>
+  <rect x="468" y="766" width="80" height="19" rx="4" fill="#1B7860" stroke="#1B7860" stroke-width="1.4"/>
+  <text x="508" y="780" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO3</text>
+  <line x1="458" y1="775" x2="468" y2="775" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="775" r="3.2" fill="#14191B"/>
+  <text x="558" y="780" font-size="12.5" fill="#3B4A50">RX ← TX1 оптомодуля</text>
+  <rect x="468" y="788" width="80" height="19" rx="4" fill="#FFFFFF" stroke="#B9C6C4" stroke-width="1.4"/>
+  <text x="508" y="802" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#6B7C83">GPIO2</text>
+  <line x1="458" y1="797" x2="468" y2="797" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="797" r="3.2" fill="#14191B"/>
+  <text x="558" y="802" font-size="12.5" fill="#3B4A50">strapping — не чіпати</text>
+  <rect x="468" y="810" width="80" height="19" rx="4" fill="#14191B" stroke="#14191B" stroke-width="1.4"/>
+  <text x="508" y="824" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#FFFFFF">GPIO1</text>
+  <line x1="458" y1="819" x2="468" y2="819" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="819" r="3.2" fill="#14191B"/>
+  <text x="558" y="824" font-size="12.5" fill="#3B4A50">перемикач РЕБ</text>
+  <rect x="468" y="832" width="80" height="19" rx="4" fill="#FFFFFF" stroke="#B9C6C4" stroke-width="1.4"/>
+  <text x="508" y="846" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#6B7C83">GPIO0</text>
+  <line x1="458" y1="841" x2="468" y2="841" stroke="#6B7C83" stroke-width="1.3"/>
+  <circle cx="452" cy="841" r="3.2" fill="#14191B"/>
+  <text x="558" y="846" font-size="12.5" fill="#3B4A50">вільний · останній ADC</text>
 </svg>

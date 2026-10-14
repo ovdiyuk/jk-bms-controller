@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <U8g2lib.h>
+#include <Wire.h>
 
 // ===== JK BMS UART control (old "NW" TTL protocol, GPS port, 115200 8N1) =====
 // RED/YELLOW/GREEN indicator, common cathode, built-in resistors (3-6 V module).
@@ -33,6 +35,15 @@ const bool BUTTON_ACTIVE_LEVEL = HIGH; // HIGH (3.3 V) = discharge ON
 const uint8_t LED_PIN_RED = 5;    // GPIO5 - faults
 const uint8_t LED_PIN_YELLOW = 6; // GPIO6 - ready
 const uint8_t LED_PIN_GREEN = 7;  // GPIO7 - running
+
+// OLED 1.3" 128x64, SH1106 (NOT SSD1306 - these 1.3" modules use SH1106),
+// I2C on the two pins that are still free.
+const uint8_t OLED_SDA_PIN = 10;
+const uint8_t OLED_SCL_PIN = 20;
+const uint32_t OLED_I2C_HZ = 400000;
+const unsigned long OLED_REFRESH_MS = 250;
+const unsigned long OLED_RENDER_BUDGET_MS = 120; // довше - вважаємо шину завислою
+const uint8_t OLED_MAX_FAILS = 5;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -67,6 +78,11 @@ uint8_t bmsSocPercent = 100;
 unsigned long lastBmsRxMs = 0;     // Час останньої відповіді від BMS
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
 const char *ledState = "?";        // Поточний стан індикатора, для логу
+float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
+
+U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+bool oledPresent = false;          // Чи відгукнувся дисплей на шині
+uint8_t oledFailCount = 0;         // Поспіль невдалих/задовгих оновлень
 
 bool lastStablePressed = false;
 bool lastRawPressed = false;
@@ -311,6 +327,8 @@ void parseTelemetryData(const uint8_t *buf, uint16_t len) {
     }
     // Тег 0x83: Загальна напруга - 2 байти
     else if (tag == 0x83 && k + 2 < len - 4) {
+      uint16_t rawPackV = ((uint16_t)buf[k + 1] << 8) | buf[k + 2];
+      bmsPackVoltageV = (float)rawPackV * 0.01f;
       k += 3;
     }
     // Тег 0x84: Струм (Current) - 2 байти
@@ -430,9 +448,10 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | LED: %s\n",
-            bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
-            bmsActualDischargeState ? "ON " : "OFF", ledState);
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | OLED = %s | LED: %s\n",
+            bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
+            bmsActualDischargeState ? "ON " : "OFF",
+            oledPresent ? "ok" : "--", ledState);
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -445,12 +464,80 @@ void processBmsResponses() {
   }
 }
 
+// ===== OLED =====
+// Дисплей навмисно НЕ є обовязковим: якщо він не відповів на шині або
+// підвис під перешкодою, керування розрядом має працювати далі.
+bool probeOledAddress(uint8_t addr7) {
+  Wire.beginTransmission(addr7);
+  return Wire.endTransmission() == 0;
+}
+
+void setupOled() {
+  Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_HZ);
+  Wire.setTimeOut(50); // мс, щоб зависла шина не блокувала цикл керування
+
+  uint8_t addr = 0;
+  if (probeOledAddress(0x3C)) addr = 0x3C;
+  else if (probeOledAddress(0x3D)) addr = 0x3D;
+
+  if (addr == 0) {
+    Serial.println("OLED: not found on I2C, running without display");
+    return;
+  }
+
+  oled.setI2CAddress(addr << 1);
+  oled.begin();
+  oled.setBusClock(OLED_I2C_HZ);
+  oledPresent = true;
+  Serial.printf("OLED: SH1106 found at 0x%02X on SDA=GPIO%u SCL=GPIO%u\n", addr,
+                OLED_SDA_PIN, OLED_SCL_PIN);
+}
+
+void updateOled() {
+  if (!oledPresent) return;
+
+  static unsigned long lastDrawMs = 0;
+  if (millis() - lastDrawMs < OLED_REFRESH_MS) return;
+  lastDrawMs = millis();
+
+  char buf[16];
+  if (bmsConnected) {
+    snprintf(buf, sizeof(buf), "%.2f", bmsPackVoltageV);
+  } else {
+    snprintf(buf, sizeof(buf), "--.--");
+  }
+
+  unsigned long t0 = millis();
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(0, 10, "PACK");
+  oled.setFont(u8g2_font_logisoso32_tn);
+  oled.drawStr(0, 50, buf);
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(104, 50, "V");
+  oled.sendBuffer();
+  unsigned long took = millis() - t0;
+
+  // Захист від зависання шини: не мовчимо, але й не тягнемо цикл за собою
+  if (took > OLED_RENDER_BUDGET_MS) {
+    if (++oledFailCount >= OLED_MAX_FAILS) {
+      oledPresent = false;
+      Serial.printf("OLED: disabled after %u slow renders (last %lu ms). "
+                    "Control keeps running.\n",
+                    oledFailCount, took);
+    }
+  } else if (oledFailCount) {
+    oledFailCount = 0;
+  }
+}
+
 void setup() {
   pinMode(PIN_BUTTON, INPUT_PULLDOWN); // switch pulls the pin UP to 3.3 V
   setupLeds();
 
   Serial.begin(115200);
   Serial.println("JK BMS controller starting");
+  setupOled();
   Serial1.begin(115200, SERIAL_8N1, BMS_RX_PIN, BMS_TX_PIN);
   Serial.printf("Serial1 initialized: RX=GPIO%d, TX=GPIO%d\n", BMS_RX_PIN,
                 BMS_TX_PIN);
@@ -467,6 +554,7 @@ void loop() {
 
   updateHeartbeat();
   updateLedIndicators();
+  updateOled();
 
   bool raw = (digitalRead(PIN_BUTTON) == BUTTON_ACTIVE_LEVEL);
   unsigned long now = millis();
