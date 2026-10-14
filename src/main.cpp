@@ -141,6 +141,12 @@ const uint8_t REG_DISCHARGE_SW = 0xAC; // 0/1 - discharging MOSFET
 
 const unsigned long DEBOUNCE_MS = 50;
 const unsigned long REFRESH_MS = 5000; // periodic resend of state
+// Вбудований світлодіод. У режимі heartbeat світиться половину часу і тягне
+// 0.5-1.5 мА — менше піввідсотка бюджету. Вимкнений заради економії,
+// ціною єдиної зовнішньої ознаки, що прошивка жива.
+// Світлодіод живлення на платі цим не гаситься: він припаяний до шини
+// і знімається лише фізично.
+#define HEARTBEAT_ENABLED 0
 const unsigned long HEARTBEAT_INTERVAL_MS = 500;
 
 // ===== Налаштування порогів індикації (налаштовувані константи) =====
@@ -219,6 +225,9 @@ void setupLeds() {
 }
 
 void updateHeartbeat() {
+#if !HEARTBEAT_ENABLED
+  return; // світлодіод лишається погашеним із setupLeds()
+#else
   static unsigned long lastHeartbeatMs = 0;
   static bool heartbeatState = false;
 
@@ -227,6 +236,7 @@ void updateHeartbeat() {
     heartbeatState = !heartbeatState;
     setOnboardLed(heartbeatState);
   }
+#endif
 }
 
 // Мигання всіх LED при відсутності зв'язку з BMS
