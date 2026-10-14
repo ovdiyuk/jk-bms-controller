@@ -72,6 +72,12 @@ const unsigned long TELEMETRY_FAST_MS = 200;
 
 // Нижче цього струму прогноз часу не має сенсу
 const float RUNTIME_MIN_CURRENT_A = 0.5f;
+
+// Пульт не має шунта, тому його час роботи рахується за ПРИЙНЯТИМ
+// споживанням, а не виміряним. 320 mA — оцінка з бюджету живлення:
+// оптомодуль ~250, контролер ~50, індикатор ~20. Уточнити за фактом.
+const uint16_t PULT_CAPACITY_MAH = 2000;
+const uint16_t PULT_TYPICAL_DRAW_MA = 320;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -593,6 +599,18 @@ bool runtimeEstimate(uint16_t *hours, uint8_t *mins) {
   return true;
 }
 
+// "Час 8г 20хв" або "Час >99г" — спільний формат для обох рядків
+void formatRuntime(char *out, size_t n, float h) {
+  if (h > 99.0f) {
+    snprintf(out, n, "Час >99г");
+    return;
+  }
+  uint16_t hh = (uint16_t)h;
+  uint8_t mm = (uint8_t)((h - (float)hh) * 60.0f + 0.5f);
+  if (mm >= 60) { mm = 0; hh++; }
+  snprintf(out, n, "Час %uг %02uхв", (unsigned)hh, (unsigned)mm);
+}
+
 // Назва аварії одним словом, під коди з determineActiveFaultCode()
 const char *faultName(uint8_t code) {
   switch (code) {
@@ -657,39 +675,46 @@ void updateOled() {
     uint8_t tw = oled.getStrWidth(word);
     oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
   } else {
-    oled.setFont(u8g2_font_9x15_t_cyrillic);
+    // Чотири рядки в 52 px: шрифт 7x13 дає рівно 13 px на рядок
+    oled.setFont(u8g2_font_7x13_t_cyrillic);
 
-    // Рядок 1: власний акумулятор пульта
-    snprintf(buf, sizeof(buf), "Пульт %u%%", (unsigned)liPoPercent(remoteBatteryV));
-    oled.drawUTF8(x0, y0 + 13, buf);
+    // 1: заряд власного акумулятора пульта
+    uint8_t pultPct = liPoPercent(remoteBatteryV);
+    snprintf(buf, sizeof(buf), "Пульт %u%%", (unsigned)pultPct);
+    oled.drawUTF8(x0, y0 + 11, buf);
 
-    // Рядок 2: батарея РЕБ — заряд і струм споживання
+    // 2: час роботи пульта. Шунта в пульті немає, тому рахуємо за
+    //    ПРИЙНЯТИМ споживанням, а не виміряним.
+    if (remoteBatteryV > 0.0f) {
+      float mah = (float)PULT_CAPACITY_MAH * (float)pultPct / 100.0f;
+      formatRuntime(buf, sizeof(buf), mah / (float)PULT_TYPICAL_DRAW_MA);
+    } else {
+      snprintf(buf, sizeof(buf), "Час --");
+    }
+    oled.drawUTF8(x0, y0 + 24, buf);
+
+    // 3: заряд батареї РЕБ і струм споживання
     if (bmsConnected) {
       snprintf(buf, sizeof(buf), "РЕБ %u%% %.1fA", (unsigned)bmsSocPercent,
                bmsCurrentA);
     } else {
       snprintf(buf, sizeof(buf), "РЕБ --");
     }
-    oled.drawUTF8(x0, y0 + 30, buf);
+    oled.drawUTF8(x0, y0 + 37, buf);
 
-    // Рядок 3: аварія важливіша за прогноз, тому витісняє його
+    // 4: час роботи РЕБ, або назва аварії — вона важливіша за прогноз
     uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
     if (f != 0) {
-      oled.drawUTF8(x0, y0 + 47, faultName(f));
+      oled.drawUTF8(x0, y0 + 50, faultName(f));
     } else if (bmsConnected) {
       uint16_t rh;
       uint8_t rm;
       if (runtimeEstimate(&rh, &rm)) {
-        if (rh > 99) {
-          snprintf(buf, sizeof(buf), "Час >99г");
-        } else {
-          snprintf(buf, sizeof(buf), "Час %uг %02uхв", (unsigned)rh,
-                   (unsigned)rm);
-        }
+        formatRuntime(buf, sizeof(buf), (float)rh + (float)rm / 60.0f);
       } else {
         snprintf(buf, sizeof(buf), "Час --");
       }
-      oled.drawUTF8(x0, y0 + 47, buf);
+      oled.drawUTF8(x0, y0 + 50, buf);
     }
   }
 #endif
