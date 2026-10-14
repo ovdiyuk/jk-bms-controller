@@ -55,6 +55,13 @@ const uint8_t OLED_MARGIN_X = 6;
 const uint8_t OLED_MARGIN_Y = 6;
 const unsigned long OLED_RENDER_BUDGET_MS = 120; // довше - вважаємо шину завислою
 const uint8_t OLED_MAX_FAILS = 5;
+
+// Власний акумулятор пульта: дільник 10k/10k на GPIO0.
+// Li-Po 3.0-4.2 V -> 1.5-2.1 V на вході ADC, у межах діапазону.
+const uint8_t PIN_VBAT_SENSE = 0;
+const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k
+const uint8_t VBAT_SAMPLES = 16;      // усереднення проти шуму від бустерів
+const unsigned long VBAT_PERIOD_MS = 1000;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -90,6 +97,8 @@ unsigned long lastBmsRxMs = 0;     // Час останньої відповід
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
 const char *ledState = "?";        // Поточний стан індикатора, для логу
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
+float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
+uint32_t remoteBatteryRawMv = 0;   // Сире значення на піні, для діагностики
 
 // Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
@@ -460,10 +469,11 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | OLED = %s | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV na pini) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
             bmsActualDischargeState ? "ON " : "OFF",
-            oledPresent ? "ok" : "--", ledState);
+            oledPresent ? "ok" : "--", remoteBatteryV,
+            (unsigned long)remoteBatteryRawMv, ledState);
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -601,10 +611,26 @@ void updateOled() {
   }
 }
 
+// Власний акумулятор пульта. Читається з усередненням: поруч два імпульсні
+// перетворювачі, і одиночна вибірка стрибає.
+void updateRemoteBattery() {
+  static unsigned long lastMs = 0;
+  if (remoteBatteryV > 0.0f && millis() - lastMs < VBAT_PERIOD_MS) return;
+  lastMs = millis();
+
+  uint32_t acc = 0;
+  for (uint8_t i = 0; i < VBAT_SAMPLES; i++) {
+    acc += analogReadMilliVolts(PIN_VBAT_SENSE);
+  }
+  remoteBatteryRawMv = acc / VBAT_SAMPLES;
+  remoteBatteryV = (float)remoteBatteryRawMv * VBAT_DIVIDER / 1000.0f;
+}
+
 void setup() {
   Serial.begin(115200);
   delay(2000); // час хосту підхопити USB CDC після скидання
-  pinMode(PIN_BUTTON, INPUT_PULLDOWN); // switch pulls the pin UP to 3.3 V
+  pinMode(PIN_BUTTON, INPUT_PULLDOWN);
+  analogSetPinAttenuation(PIN_VBAT_SENSE, ADC_11db); // повний діапазон ~0-3.1 V // switch pulls the pin UP to 3.3 V
   setupLeds();
 
   Serial.println();
@@ -628,6 +654,7 @@ void loop() {
 
   updateHeartbeat();
   updateLedIndicators();
+  updateRemoteBattery();
   updateOled();
 
   bool raw = (digitalRead(PIN_BUTTON) == BUTTON_ACTIVE_LEVEL);
