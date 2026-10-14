@@ -621,7 +621,6 @@ void updateOled() {
     oled.setFont(u8g2_font_10x20_tr);
     uint8_t tw = oled.getStrWidth(word);
     oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
-    oled.drawFrame(x0, y0 + 8, w, 36);
   } else {
     oled.setFont(u8g2_font_9x15_t_cyrillic);
 
