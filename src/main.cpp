@@ -71,8 +71,17 @@ const unsigned long STATUS_OVERLAY_MS = 5000; // ARM/DISARM після пере�
 // може бути придушений власною установкою, а пульт стає помітним в ефірі.
 // Вимикається одним нулем.
 #define WIFI_AP_ENABLED 1
-const char *AP_SSID = "JK-Pult";
-const char *AP_PASS = "zminy-mene-12";  // ЗМІНІТЬ ПЕРЕД ПОЛЬОВИМ ВИКОРИСТАННЯМ
+// Облікові дані лежать в include/secrets.h, який не комітиться:
+// репозиторій публічний, а через цю мережу керується живлення РЕБ.
+// Зразок — include/secrets.h.example.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#define SECRET_AP_SSID "JK-Pult"
+#define SECRET_AP_PASS "change-me-please"
+#endif
+const char *AP_SSID = SECRET_AP_SSID;
+const char *AP_PASS = SECRET_AP_PASS;
 const uint8_t AP_CHANNEL = 6;
 const uint8_t AP_MAX_CLIENTS = 2;
 
