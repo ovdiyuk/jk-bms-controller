@@ -80,7 +80,7 @@ bool bmsConnected = false;          // Прапорець наявності з�
 const char *ledState = "?";        // Поточний стан індикатора, для логу
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
 
-U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE); // R0 = bez povorotu
 bool oledPresent = false;          // Чи відгукнувся дисплей на шині
 uint8_t oledFailCount = 0;         // Поспіль невдалих/задовгих оновлень
 
@@ -472,24 +472,44 @@ bool probeOledAddress(uint8_t addr7) {
   return Wire.endTransmission() == 0;
 }
 
+// Якщо дисплея немає або шина притиснута, сюди не можна заходити взагалі:
+// Wire на зайнятій шині може блокуватись, а це підвісило б керування розрядом.
 void setupOled() {
+  Serial.println("OLED: checking bus...");
+
+  pinMode(OLED_SDA_PIN, INPUT_PULLUP);
+  pinMode(OLED_SCL_PIN, INPUT_PULLUP);
+  delay(5);
+  int sdaIdle = digitalRead(OLED_SDA_PIN);
+  int sclIdle = digitalRead(OLED_SCL_PIN);
+  Serial.printf("OLED: idle levels SDA=%d SCL=%d\n", sdaIdle, sclIdle);
+
+  if (sdaIdle == LOW || sclIdle == LOW) {
+    Serial.println("OLED: bus is held low - skipping I2C entirely");
+    return;
+  }
+
   Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_HZ);
-  Wire.setTimeOut(50); // мс, щоб зависла шина не блокувала цикл керування
+  Wire.setTimeOut(50);
+  Serial.println("OLED: Wire started, probing...");
 
   uint8_t addr = 0;
   if (probeOledAddress(0x3C)) addr = 0x3C;
   else if (probeOledAddress(0x3D)) addr = 0x3D;
+  Serial.printf("OLED: probe done, addr=0x%02X\n", addr);
 
   if (addr == 0) {
-    Serial.println("OLED: not found on I2C, running without display");
+    Wire.end();
+    Serial.println("OLED: not found, running without display");
     return;
   }
 
   oled.setI2CAddress(addr << 1);
+  Serial.println("OLED: begin()...");
   oled.begin();
   oled.setBusClock(OLED_I2C_HZ);
   oledPresent = true;
-  Serial.printf("OLED: SH1106 found at 0x%02X on SDA=GPIO%u SCL=GPIO%u\n", addr,
+  Serial.printf("OLED: SH1106 ready at 0x%02X (SDA=GPIO%u SCL=GPIO%u)\n", addr,
                 OLED_SDA_PIN, OLED_SCL_PIN);
 }
 
@@ -536,9 +556,13 @@ void setup() {
   setupLeds();
 
   Serial.begin(115200);
+  delay(1500); // час хосту підхопити USB CDC, інакше стартовий лог губиться
+  Serial.println();
   Serial.println("JK BMS controller starting");
-  setupOled();
   Serial1.begin(115200, SERIAL_8N1, BMS_RX_PIN, BMS_TX_PIN);
+  Serial.println("Serial1 up");
+  setupOled();
+  Serial.println("setup() done");
   Serial.printf("Serial1 initialized: RX=GPIO%d, TX=GPIO%d\n", BMS_RX_PIN,
                 BMS_TX_PIN);
   delay(300);
