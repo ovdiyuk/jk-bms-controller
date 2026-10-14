@@ -78,6 +78,20 @@ const float RUNTIME_MIN_CURRENT_A = 0.5f;
 // оптомодуль ~250, контролер ~50, індикатор ~20. Уточнити за фактом.
 const uint16_t PULT_CAPACITY_MAH = 2000;
 const uint16_t PULT_TYPICAL_DRAW_MA = 320;
+
+// Визначення заряджання пульта.
+// 1 — читаємо вихід CHRG зарядного модуля (TP4056 і подібні): він
+//     відкритий колектор, притиснутий до нуля поки йде заряд.
+//     Підключити до GPIO21, це єдиний вільний нестрапінговий пін.
+// 0 — здогадка за трендом напруги. Працює в основній частині заряду,
+//     але наприкінці крива виходить на полицю і тренд зникає.
+#define PULT_CHARGE_PIN_ENABLED 0
+const uint8_t PIN_PULT_CHARGE = 21;
+
+// Вікно тренду. Біля повного заряду приріст падає до 2-3 мВ за хвилину,
+// тому вікно має бути довгим, інакше це не відрізнити від шуму (~2 мВ).
+const unsigned long TREND_WINDOW_MS = 180000;
+const float TREND_THRESHOLD_V = 0.005f;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -117,6 +131,7 @@ float bmsCapacityAh = 0.0f;        // Ємність збірки, тег 0xAA
 float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
 uint32_t remoteBatteryRawMv = 0;   // Сире значення на піні, для діагностики
 unsigned long statusOverlayUntilMs = 0; // До якого моменту показувати ARM/DISARM
+bool remoteCharging = false;       // Визначається за трендом напруги
 
 // Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
@@ -495,11 +510,12 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV na pini) | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV, %s) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
             bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
             oledPresent ? "ok" : "--", remoteBatteryV,
-            (unsigned long)remoteBatteryRawMv, ledState);
+            (unsigned long)remoteBatteryRawMv,
+            remoteCharging ? "zaryad" : "rozryad", ledState);
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -590,7 +606,10 @@ bool runtimeEstimate(uint16_t *hours, uint8_t *mins) {
   float load = fabs(bmsCurrentA);
   if (load < RUNTIME_MIN_CURRENT_A) return false;
 
-  float remainAh = bmsCapacityAh * (float)bmsSocPercent / 100.0f;
+  // При розряді рахуємо до порожнього, при заряді — до повного.
+  float pct = (bmsCurrentA > 0.0f) ? (100.0f - (float)bmsSocPercent)
+                                   : (float)bmsSocPercent;
+  float remainAh = bmsCapacityAh * pct / 100.0f;
   float h = remainAh / load;
   if (h > 999.0f) h = 999.0f;
   *hours = (uint16_t)h;
@@ -599,16 +618,21 @@ bool runtimeEstimate(uint16_t *hours, uint8_t *mins) {
   return true;
 }
 
-// "Час 8г 20хв" або "Час >99г" — спільний формат для обох рядків
-void formatRuntime(char *out, size_t n, float h) {
+// "Розряд 8г 20хв", "Заряд >99г", "Спокій --" — спільний формат.
+// Відємне h означає, що оцінити неможливо.
+void formatRuntime(char *out, size_t n, const char *label, float h) {
+  if (h < 0.0f) {
+    snprintf(out, n, "%s --", label);
+    return;
+  }
   if (h > 99.0f) {
-    snprintf(out, n, "Час >99г");
+    snprintf(out, n, "%s >99г", label);
     return;
   }
   uint16_t hh = (uint16_t)h;
   uint8_t mm = (uint8_t)((h - (float)hh) * 60.0f + 0.5f);
   if (mm >= 60) { mm = 0; hh++; }
-  snprintf(out, n, "Час %uг %02uхв", (unsigned)hh, (unsigned)mm);
+  snprintf(out, n, "%s %uг %02uхв", label, (unsigned)hh, (unsigned)mm);
 }
 
 // Назва аварії одним словом, під коди з determineActiveFaultCode()
@@ -670,7 +694,7 @@ void updateOled() {
   if (millis() < statusOverlayUntilMs) {
     // Підтвердження після перемикання. Показуємо ФАКТИЧНИЙ стан ключа з BMS:
     // якщо команда не дійшла, оператор має бачити правду, а не свій намір.
-    const char *word = bmsActualDischargeState ? "ARM" : "DISARM";
+    const char *word = bmsActualDischargeState ? "Arming" : "Disarming";
     oled.setFont(u8g2_font_10x20_tr);
     uint8_t tw = oled.getStrWidth(word);
     oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
@@ -685,11 +709,15 @@ void updateOled() {
 
     // 2: час роботи пульта. Шунта в пульті немає, тому рахуємо за
     //    ПРИЙНЯТИМ споживанням, а не виміряним.
-    if (remoteBatteryV > 0.0f) {
+    if (remoteCharging) {
+      // Струм зарядного модуля нам невідомий, тому час не вигадуємо
+      formatRuntime(buf, sizeof(buf), "Заряд", -1.0f);
+    } else if (remoteBatteryV > 0.0f) {
       float mah = (float)PULT_CAPACITY_MAH * (float)pultPct / 100.0f;
-      formatRuntime(buf, sizeof(buf), mah / (float)PULT_TYPICAL_DRAW_MA);
+      formatRuntime(buf, sizeof(buf), "Розряд",
+                    mah / (float)PULT_TYPICAL_DRAW_MA);
     } else {
-      snprintf(buf, sizeof(buf), "Час --");
+      formatRuntime(buf, sizeof(buf), "Розряд", -1.0f);
     }
     oled.drawUTF8(x0, y0 + 24, buf);
 
@@ -707,12 +735,15 @@ void updateOled() {
     if (f != 0) {
       oled.drawUTF8(x0, y0 + 50, faultName(f));
     } else if (bmsConnected) {
+      const char *lbl = (bmsCurrentA > RUNTIME_MIN_CURRENT_A)    ? "Заряд"
+                        : (bmsCurrentA < -RUNTIME_MIN_CURRENT_A) ? "Розряд"
+                                                                 : "Спокій";
       uint16_t rh;
       uint8_t rm;
       if (runtimeEstimate(&rh, &rm)) {
-        formatRuntime(buf, sizeof(buf), (float)rh + (float)rm / 60.0f);
+        formatRuntime(buf, sizeof(buf), lbl, (float)rh + (float)rm / 60.0f);
       } else {
-        snprintf(buf, sizeof(buf), "Час --");
+        formatRuntime(buf, sizeof(buf), lbl, -1.0f);
       }
       oled.drawUTF8(x0, y0 + 50, buf);
     }
@@ -748,13 +779,42 @@ void updateRemoteBattery() {
   }
   remoteBatteryRawMv = acc / VBAT_SAMPLES;
   remoteBatteryV = (float)remoteBatteryRawMv * VBAT_DIVIDER / 1000.0f;
+
+  // Шунта в пульті немає, тому заряджання визначаємо за трендом напруги.
+  // Вікно 30 с, поріг 4 мВ — трохи вище шуму усередненого виміру (~2 мВ).
+  // Гістерезис: щоб зняти ознаку заряду, потрібне падіння, а не просто
+  // відсутність приросту. Інакше на полиці наприкінці заряду прапорець
+  // блимав би туди-сюди.
+  //
+  // Це все одно здогадка. Надійно було б завести вихід CHRG зарядного
+  // модуля на вільний GPIO21 — тоді стан читався б напряму.
+  static float trendRefV = 0.0f;
+  static unsigned long trendRefMs = 0;
+  if (trendRefMs == 0) {
+    trendRefV = remoteBatteryV;
+    trendRefMs = millis();
+  } else if (millis() - trendRefMs >= TREND_WINDOW_MS) {
+    float delta = remoteBatteryV - trendRefV;
+    if (delta > TREND_THRESHOLD_V) remoteCharging = true;
+    else if (delta < -TREND_THRESHOLD_V) remoteCharging = false;
+    trendRefV = remoteBatteryV;
+    trendRefMs = millis();
+  }
+
+#if PULT_CHARGE_PIN_ENABLED
+  // Апаратний сигнал має пріоритет над здогадкою: CHRG у нулі = йде заряд
+  remoteCharging = (digitalRead(PIN_PULT_CHARGE) == LOW);
+#endif
 }
 
 void setup() {
   Serial.begin(115200);
   delay(2000); // час хосту підхопити USB CDC після скидання
   pinMode(PIN_BUTTON, INPUT_PULLDOWN);
-  analogSetPinAttenuation(PIN_VBAT_SENSE, ADC_11db); // повний діапазон ~0-3.1 V // switch pulls the pin UP to 3.3 V
+  analogSetPinAttenuation(PIN_VBAT_SENSE, ADC_11db); // повний діапазон ~0-3.1 V
+#if PULT_CHARGE_PIN_ENABLED
+  pinMode(PIN_PULT_CHARGE, INPUT_PULLUP); // CHRG — відкритий колектор
+#endif // switch pulls the pin UP to 3.3 V
   setupLeds();
 
   Serial.println();
