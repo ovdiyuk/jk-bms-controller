@@ -63,6 +63,15 @@ const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k
 const uint8_t VBAT_SAMPLES = 16;      // усереднення проти шуму від бустерів
 const unsigned long VBAT_PERIOD_MS = 1000;
 const unsigned long STATUS_OVERLAY_MS = 5000; // ARM/DISARM після перемикання
+
+// Опитування BMS адаптивне: у спокої рідко, щоб не їсти батарею пульта,
+// але поки команда не підтверджена — часто, щоб ARM/DISARM не чекав секунду.
+// На швидкість самого перемикання це не впливає: команда йде по фронту тумблера.
+const unsigned long TELEMETRY_IDLE_MS = 1000;
+const unsigned long TELEMETRY_FAST_MS = 200;
+
+// Нижче цього струму прогноз часу не має сенсу
+const float RUNTIME_MIN_CURRENT_A = 0.5f;
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -98,6 +107,7 @@ unsigned long lastBmsRxMs = 0;     // Час останньої відповід
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
 const char *ledState = "?";        // Поточний стан індикатора, для логу
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
+float bmsCapacityAh = 0.0f;        // Ємність збірки, тег 0xAA
 float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
 uint32_t remoteBatteryRawMv = 0;   // Сире значення на піні, для діагностики
 unsigned long statusOverlayUntilMs = 0; // До якого моменту показувати ARM/DISARM
@@ -389,6 +399,14 @@ void parseTelemetryData(const uint8_t *buf, uint16_t len) {
     else if ((tag == 0x8B || tag == 0x8C || tag == 0x8D) && k + 2 < len - 4) {
       k += 3;
     }
+    // Тег 0xAA: Налаштована ємність збірки (А·год) - 4 байти
+    else if (tag == 0xAA && k + 4 < len - 4) {
+      uint32_t rawCap = ((uint32_t)buf[k + 1] << 24) |
+                        ((uint32_t)buf[k + 2] << 16) |
+                        ((uint32_t)buf[k + 3] << 8) | buf[k + 4];
+      if (rawCap > 0 && rawCap < 10000) bmsCapacityAh = (float)rawCap;
+      k += 5;
+    }
     // Тег 0xAB, 0xAC: Стан ключів заряду та розряду (1 байт)
     else if (tag == 0xAB && k + 1 < len - 4) {
       k += 2;
@@ -471,9 +489,9 @@ void processBmsResponses() {
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV na pini) | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | PULT = %.2f V (%lu mV na pini) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
-            bmsActualDischargeState ? "ON " : "OFF",
+            bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
             oledPresent ? "ok" : "--", remoteBatteryV,
             (unsigned long)remoteBatteryRawMv, ledState);
       }
@@ -558,6 +576,23 @@ uint8_t liPoPercent(float v) {
   return 100;
 }
 
+// Прогноз часу роботи: скільки лишилось ампер-годин, поділити на струм.
+// Має сенс лише під навантаженням; у спокої струм близький до нуля
+// і будь-яке число було б вигадкою.
+bool runtimeEstimate(uint16_t *hours, uint8_t *mins) {
+  if (bmsCapacityAh <= 0.0f) return false;
+  float load = fabs(bmsCurrentA);
+  if (load < RUNTIME_MIN_CURRENT_A) return false;
+
+  float remainAh = bmsCapacityAh * (float)bmsSocPercent / 100.0f;
+  float h = remainAh / load;
+  if (h > 999.0f) h = 999.0f;
+  *hours = (uint16_t)h;
+  *mins = (uint8_t)((h - (float)*hours) * 60.0f + 0.5f);
+  if (*mins >= 60) { *mins = 0; (*hours)++; }
+  return true;
+}
+
 // Назва аварії одним словом, під коди з determineActiveFaultCode()
 const char *faultName(uint8_t code) {
   switch (code) {
@@ -637,10 +672,24 @@ void updateOled() {
     }
     oled.drawUTF8(x0, y0 + 30, buf);
 
-    // Рядок 3 зявляється лише за аварії
+    // Рядок 3: аварія важливіша за прогноз, тому витісняє його
     uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
     if (f != 0) {
       oled.drawUTF8(x0, y0 + 47, faultName(f));
+    } else if (bmsConnected) {
+      uint16_t rh;
+      uint8_t rm;
+      if (runtimeEstimate(&rh, &rm)) {
+        if (rh > 99) {
+          snprintf(buf, sizeof(buf), "Час >99г");
+        } else {
+          snprintf(buf, sizeof(buf), "Час %uг %02uхв", (unsigned)rh,
+                   (unsigned)rm);
+        }
+      } else {
+        snprintf(buf, sizeof(buf), "Час --");
+      }
+      oled.drawUTF8(x0, y0 + 47, buf);
     }
   }
 #endif
@@ -737,7 +786,12 @@ void loop() {
 
   // Періодичний запит телеметрії від BMS (5 разів на секунду)
   static unsigned long lastTelemetryReqMs = 0;
-  if ((now - lastTelemetryReqMs) >= 200) {
+  bool awaitingConfirm = bmsConnected &&
+                         (bmsActualDischargeState != targetDischargeState);
+  unsigned long telemetryPeriod =
+      (awaitingConfirm || now < statusOverlayUntilMs) ? TELEMETRY_FAST_MS
+                                                      : TELEMETRY_IDLE_MS;
+  if ((now - lastTelemetryReqMs) >= telemetryPeriod) {
     lastTelemetryReqMs = now;
     jkRequestTelemetry();
   }
