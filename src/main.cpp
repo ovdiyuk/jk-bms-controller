@@ -61,7 +61,13 @@ const uint8_t OLED_MAX_FAILS = 5;
 // Власний акумулятор пульта: дільник 10k/10k на GPIO0.
 // Li-Po 3.0-4.2 V -> 1.5-2.1 V на вході ADC, у межах діапазону.
 const uint8_t PIN_VBAT_SENSE = 0;
-const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k
+const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k — фізичне співвідношення
+
+// Поправка на допуск резисторів і калібрування ADC, знята по мультиметру:
+// на піні 2049 мВ, розрахунок давав 4.098 В, прилад показував 4.066 В.
+// Це однокрапкова корекція підсилення; найточніша біля 4.07 В, але в межах
+// робочого діапазону Li-Po похибка майже вся саме масштабна, а не зсувна.
+const float VBAT_CALIBRATION = 0.99219f;
 const uint8_t VBAT_SAMPLES = 16;      // усереднення проти шуму від бустерів
 const unsigned long VBAT_PERIOD_MS = 1000;
 const unsigned long STATUS_OVERLAY_MS = 5000; // ARM/DISARM після перемикання
@@ -830,7 +836,8 @@ void updateRemoteBattery() {
     acc += analogReadMilliVolts(PIN_VBAT_SENSE);
   }
   remoteBatteryRawMv = acc / VBAT_SAMPLES;
-  remoteBatteryV = (float)remoteBatteryRawMv * VBAT_DIVIDER / 1000.0f;
+  remoteBatteryV =
+      (float)remoteBatteryRawMv * VBAT_DIVIDER * VBAT_CALIBRATION / 1000.0f;
 
   // Головний детектор: стрибок між сусідніми вимірами. Підключення або
   // відєднання зарядки видно одразу, за один період.
