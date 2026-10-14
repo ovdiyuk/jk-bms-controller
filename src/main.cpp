@@ -981,7 +981,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 <div id="r2"></div><div id="r3"></div></div>
 <div class="ctl">
 <label><input type="checkbox" id="wc">
-<span>Керувати з браузера</span></label>
+<span>Забрати керування</span></label>
 <button id="bt" disabled></button>
 <p class="hint" id="hint"></p>
 </div></div><script>
