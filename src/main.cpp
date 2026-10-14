@@ -62,6 +62,7 @@ const uint8_t PIN_VBAT_SENSE = 0;
 const float VBAT_DIVIDER = 2.0f;      // (10k + 10k) / 10k
 const uint8_t VBAT_SAMPLES = 16;      // усереднення проти шуму від бустерів
 const unsigned long VBAT_PERIOD_MS = 1000;
+const unsigned long STATUS_OVERLAY_MS = 5000; // ARM/DISARM після перемикання
 const uint8_t PIN_SPARE = 2;          // GPIO2 - SPARE (unused)
 const uint8_t ONBOARD_LED_PIN =
     8; // Onboard RED LED - ESP32-C3 Super Mini (Heartbeat)
@@ -99,6 +100,7 @@ const char *ledState = "?";        // Поточний стан індикато
 float bmsPackVoltageV = 0.0f;      // Напруга збірки, тег 0x83
 float remoteBatteryV = 0.0f;       // Власний акумулятор пульта
 uint32_t remoteBatteryRawMv = 0;   // Сире значення на піні, для діагностики
+unsigned long statusOverlayUntilMs = 0; // До якого моменту показувати ARM/DISARM
 
 // Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
@@ -535,6 +537,40 @@ void setupOled() {
                 OLED_SDA_PIN, OLED_SCL_PIN);
 }
 
+// Відсоток заряду Li-Po за напругою. Крива розряду нелінійна: середина пласка,
+// тому лінійне відображення 3.0-4.2 В брехало б на десятки відсотків.
+// Таблиця — напруга спокою; під навантаженням показання занижене, одразу
+// після зарядки — завищене, доки банка не осяде.
+uint8_t liPoPercent(float v) {
+  static const float tabV[] = {3.00f, 3.30f, 3.50f, 3.60f, 3.70f,
+                               3.80f, 3.90f, 4.00f, 4.10f, 4.20f};
+  static const uint8_t tabP[] = {0, 5, 10, 20, 35, 50, 65, 80, 90, 100};
+  const uint8_t n = sizeof(tabP);
+
+  if (v <= tabV[0]) return 0;
+  if (v >= tabV[n - 1]) return 100;
+  for (uint8_t i = 1; i < n; i++) {
+    if (v <= tabV[i]) {
+      float f = (v - tabV[i - 1]) / (tabV[i] - tabV[i - 1]);
+      return (uint8_t)(tabP[i - 1] + f * (tabP[i] - tabP[i - 1]) + 0.5f);
+    }
+  }
+  return 100;
+}
+
+// Назва аварії одним словом, під коди з determineActiveFaultCode()
+const char *faultName(uint8_t code) {
+  switch (code) {
+    case 1: return "Комірка";
+    case 2: return "Струм";
+    case 3: return "Температура";
+    case 4: return "MOSFET";
+    case 5: return "КЗ";
+    case 6: return "Баланс";
+    default: return "";
+  }
+}
+
 void updateOled() {
   if (!oledPresent) return;
 
@@ -576,27 +612,42 @@ void updateOled() {
   const uint8_t x0 = OLED_MARGIN_X;
   const uint8_t y0 = OLED_MARGIN_Y;
   const uint8_t w = oled.getDisplayWidth() - 2 * OLED_MARGIN_X;
+  char buf[24];
 
-  char buf[16];
-  if (bmsConnected) {
-    snprintf(buf, sizeof(buf), "%.2f", bmsPackVoltageV);
+  if (millis() < statusOverlayUntilMs) {
+    // Підтвердження після перемикання. Показуємо ФАКТИЧНИЙ стан ключа з BMS:
+    // якщо команда не дійшла, оператор має бачити правду, а не свій намір.
+    const char *word = bmsActualDischargeState ? "ARM" : "DISARM";
+    oled.setFont(u8g2_font_10x20_tr);
+    uint8_t tw = oled.getStrWidth(word);
+    oled.drawStr(x0 + (w - tw) / 2, y0 + 36, word);
+    oled.drawFrame(x0, y0 + 8, w, 36);
   } else {
-    snprintf(buf, sizeof(buf), "--.--");
+    oled.setFont(u8g2_font_9x15_t_cyrillic);
+
+    // Рядок 1: власний акумулятор пульта
+    snprintf(buf, sizeof(buf), "Пульт %u%%", (unsigned)liPoPercent(remoteBatteryV));
+    oled.drawUTF8(x0, y0 + 13, buf);
+
+    // Рядок 2: батарея РЕБ — заряд і струм споживання
+    if (bmsConnected) {
+      snprintf(buf, sizeof(buf), "РЕБ %u%% %.1fA", (unsigned)bmsSocPercent,
+               bmsCurrentA);
+    } else {
+      snprintf(buf, sizeof(buf), "РЕБ --");
+    }
+    oled.drawUTF8(x0, y0 + 30, buf);
+
+    // Рядок 3 зявляється лише за аварії
+    uint8_t f = bmsConnected ? determineActiveFaultCode() : 0;
+    if (f != 0) {
+      oled.drawUTF8(x0, y0 + 47, faultName(f));
+    }
   }
-
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(x0, y0 + 9, "PACK");
-
-  // Велике число притиснуте до лівого краю безпечної області,
-  // "V" — до правого, щоб нерівний зріз не з'їв ні того, ні іншого.
-  oled.setFont(u8g2_font_logisoso32_tn);
-  oled.drawStr(x0, y0 + 46, buf);
-
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(x0 + w - 6, y0 + 46, "V");
 #endif
 
-  oled.sendBuffer();  unsigned long took = millis() - t0;
+  oled.sendBuffer();
+  unsigned long took = millis() - t0;
 
   // Захист від зависання шини: не мовчимо, але й не тягнемо цикл за собою
   if (took > OLED_RENDER_BUDGET_MS) {
@@ -667,6 +718,7 @@ void loop() {
 
   if ((now - lastEdgeMs) >= DEBOUNCE_MS && raw != targetDischargeState) {
     targetDischargeState = raw;
+    statusOverlayUntilMs = now + STATUS_OVERLAY_MS;
     Serial.printf(">>> SWITCH TOGGLED! Target Discharge State = %s <<<\n",
                   targetDischargeState ? "ON" : "OFF");
     jkWriteRegister(REG_DISCHARGE_SW, targetDischargeState ? 0x01 : 0x00);
