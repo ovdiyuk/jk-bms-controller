@@ -700,7 +700,7 @@ void formatRuntime(char *out, size_t n, const char *label, float h) {
 // Назва аварії одним словом, під коди з determineActiveFaultCode()
 const char *faultName(uint8_t code) {
   switch (code) {
-    case 1: return "Комірка";
+    case 1: return "Напруга комірки";
     case 2: return "Струм";
     case 3: return "Температура";
     case 4: return "MOSFET";
@@ -889,7 +889,7 @@ void updateRemoteBattery() {
 static const char PAGE_HTML[] PROGMEM = R"HTMLPAGE(
 <!doctype html><html lang="uk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Пульт JK BMS</title><style>
+<title>Пульт РЕБ Хвиля</title><style>
 body{margin:0;background:#11171a;color:#e7edeb;
 font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;padding:18px}
 .wrap{max-width:420px;margin:0 auto}
@@ -918,7 +918,7 @@ button:disabled{opacity:.35;cursor:not-allowed}
 .arm{background:#2fa360}.disarm{background:#d14026;color:#fff}
 .hint{color:#85989d;font-size:13px;margin:10px 0 0}
 </style></head><body><div class="wrap">
-<h1>Пульт JK BMS</h1>
+<h1>Пульт РЕБ Хвиля</h1>
 <div class="lamps">
 <div id="lr" class="lamp r"></div>
 <div id="ly" class="lamp y"></div>
