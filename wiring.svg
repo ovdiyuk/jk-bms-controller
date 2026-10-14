@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 1290" width="1540" height="1290"
-     font-family="Segoe UI, Helvetica, Arial, sans-serif"
-     role="img" aria-label="Принципова схема пульта керування JK BMS через оптичний канал">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 1180" width="1540" height="1180"
+     font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img"
+     aria-label="Принципова схема пульта керування JK BMS через оптичний канал">
   <title>Пульт керування JK BMS — принципова схема</title>
-  <desc>Пульт: USB-C на модуль заряду, Li-Po 3.7 V, вимикач, два підвищувачі 5 V і 12 V.
-ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем, перемикач РЕБ з 3V3 на GPIO1,
-триколірний індикатор зі спільним катодом на GPIO5/6/7. Одне волокно перетинає межу
-гальванічної розв'язки і входить у дальній оптомодуль, зв'язаний з роз'ємом GPS на JK BMS.</desc>
-
+  <desc>Живлення пульта: USB-C, модуль заряду, Li-Po 3.7 V, вимикач, два підвищувачі 5 V і 12 V.
+ESP32-C3 Super Mini намальований за фізичною розпіновкою: ліворуч GPIO5, 6, 7, 8, 9, 10, 20, 21;
+праворуч 5V, GND, 3V3, GPIO4, GPIO3, GPIO2, GPIO1, GPIO0. Триколірний індикатор і OLED — ліворуч,
+живлення, перемикач РЕБ і оптомодуль — праворуч. Волокно перетинає межу гальванічної розвязки
+і входить у дальній оптомодуль, зв язаний з роз ємом GPS на JK BMS.</desc>
   <defs>
     <marker id="aTx" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1C5F90"/>
@@ -15,28 +15,22 @@ ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем
     <marker id="aRx" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#1B7860"/>
     </marker>
-    <marker id="aPw" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto">
+    <marker id="aPw" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#7A4FA8"/>
     </marker>
+    <marker id="aWn" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#A03A1E"/>
+    </marker>
   </defs>
-
-  <rect width="1540" height="1290" fill="#FFFFFF"/>
-
-  <!-- ===================== ПУЛЬТ ===================== -->
-  <text x="30" y="30" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" letter-spacing="1.8" fill="#6B7C83">ПУЛЬТ</text>
-
-  <!-- USB-C -->
+  <rect width="1540" height="1180" fill="#FFFFFF"/>
+  <text x="30" y="30" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#6B7C83" letter-spacing="1.8">ПУЛЬТ</text>
   <rect x="30" y="70" width="74" height="46" rx="4" fill="#FFFFFF" stroke="#14191B" stroke-width="1.6"/>
   <text x="67" y="99" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">USB-C</text>
   <line x1="104" y1="93" x2="150" y2="93" stroke="#7A4FA8" stroke-width="2"/>
-
-  <!-- charge module -->
   <rect x="150" y="61" width="164" height="64" rx="4" fill="#FFFFFF" stroke="#14191B" stroke-width="1.6"/>
-  <text x="232" y="88" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">Заряд + захист</text>
+  <text x="232" y="88" text-anchor="middle" font-size="16" fill="#14191B" font-weight="700">Заряд + захист</text>
   <text x="232" y="109" text-anchor="middle" font-size="13" fill="#6B7C83">від переразряду</text>
   <line x1="314" y1="93" x2="455" y2="93" stroke="#7A4FA8" stroke-width="2"/>
-
-  <!-- battery -->
   <circle cx="390" cy="93" r="4.2" fill="#7A4FA8"/>
   <line x1="390" y1="93" x2="390" y2="136" stroke="#7A4FA8" stroke-width="2"/>
   <line x1="364" y1="140" x2="416" y2="140" stroke="#7A4FA8" stroke-width="2.6"/>
@@ -50,253 +44,197 @@ ESP32-C3 через GPIO4/GPIO3 обмінюється з оптомодулем
   <line x1="384" y1="224" x2="396" y2="224" stroke="#14191B" stroke-width="2.4"/>
   <text x="390" y="252" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#14191B">Li-Po 3.7 V</text>
   <text x="390" y="271" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">2000 mAh</text>
-
-  <!-- main switch -->
   <circle cx="459" cy="93" r="4.5" fill="#FFFFFF" stroke="#7A4FA8" stroke-width="2"/>
-  <line x1="462" y1="90" x2="502" y2="68" stroke="#7A4FA8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="462" y1="90" x2="501" y2="73" stroke="#7A4FA8" stroke-width="2" stroke-linecap="round"/>
   <circle cx="506" cy="93" r="4.5" fill="#FFFFFF" stroke="#7A4FA8" stroke-width="2"/>
   <text x="483" y="44" text-anchor="middle" font-size="14" fill="#7A4FA8">вимикач пульта</text>
   <line x1="510" y1="93" x2="575" y2="93" stroke="#7A4FA8" stroke-width="2"/>
-
-  <!-- split -->
   <circle cx="575" cy="93" r="4.2" fill="#7A4FA8"/>
   <line x1="575" y1="72" x2="575" y2="192" stroke="#7A4FA8" stroke-width="2"/>
   <line x1="575" y1="72" x2="640" y2="72" stroke="#7A4FA8" stroke-width="2"/>
   <line x1="575" y1="192" x2="640" y2="192" stroke="#7A4FA8" stroke-width="2"/>
-
-  <!-- DC-DC 12 V -->
   <rect x="640" y="40" width="172" height="64" rx="4" fill="#FFFFFF" stroke="#14191B" stroke-width="1.6"/>
-  <text x="726" y="68" text-anchor="middle" font-size="15" font-weight="700" fill="#14191B">DC-DC BS02 V4</text>
-  <text x="726" y="90" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#7A4FA8">12 V</text>
-
-  <!-- DC-DC 5 V -->
+  <text x="726" y="68" text-anchor="middle" font-size="15" fill="#14191B" font-weight="700">DC-DC BS02 V4</text>
+  <text x="726" y="90" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8" font-weight="700">12 V</text>
   <rect x="640" y="160" width="172" height="64" rx="4" fill="#FFFFFF" stroke="#14191B" stroke-width="1.6"/>
-  <text x="726" y="188" text-anchor="middle" font-size="15" font-weight="700" fill="#14191B">DC-DC BS02 V4</text>
-  <text x="726" y="210" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#7A4FA8">5 V</text>
-
-  <!-- +12 V run -->
-  <line x1="812" y1="72" x2="1300" y2="72" stroke="#7A4FA8" stroke-width="2"/>
-  <line x1="1300" y1="72" x2="1300" y2="300" stroke="#7A4FA8" stroke-width="2"/>
-  <text x="1060" y="60" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#7A4FA8">+12 V</text>
-
-  <!-- +5 V run -->
-  <line x1="812" y1="192" x2="845" y2="192" stroke="#7A4FA8" stroke-width="2"/>
-  <line x1="845" y1="192" x2="845" y2="380" stroke="#7A4FA8" stroke-width="2"/>
-  <line x1="845" y1="380" x2="880" y2="380" stroke="#7A4FA8" stroke-width="2"/>
-  <text x="856" y="248" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#7A4FA8">+5 V</text>
-
-  <!-- ===================== ESP32-C3 ===================== -->
-  <rect x="880" y="300" width="250" height="355" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
-  <line x1="880" y1="344" x2="1130" y2="344" stroke="#14191B" stroke-width="1.6"/>
-  <text x="1005" y="331" text-anchor="middle" font-size="17" font-weight="700" fill="#14191B">ESP32-C3 Super Mini</text>
-  <text x="890" y="385" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8">5V</text>
-  <text x="890" y="425" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">3V3</text>
-  <text x="890" y="465" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#14191B">GPIO1</text>
-  <text x="890" y="510" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO10</text>
-  <text x="890" y="550" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO20</text>
-  <text x="890" y="595" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="1120" y="395" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">GPIO4</text>
-  <text x="1120" y="445" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1B7860">GPIO3</text>
-  <text x="1120" y="495" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="900" y="643" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" font-weight="700" fill="#D14026">GPIO5</text>
-  <text x="1010" y="643" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" font-weight="700" fill="#B8900F">GPIO6</text>
-  <text x="1120" y="643" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" font-weight="700" fill="#2FA360">GPIO7</text>
-
-
-  <text x="1120" y="535" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">GPIO0</text>
-  <line x1="1130" y1="530" x2="1146" y2="530" stroke="#6B7C83" stroke-width="1.4"/>
-  <circle cx="1151" cy="530" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
-  <text x="1120" y="563" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">GPIO2</text>
-  <line x1="1130" y1="558" x2="1146" y2="558" stroke="#6B7C83" stroke-width="1.4"/>
-  <circle cx="1151" cy="558" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
-  <text x="1120" y="591" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">GPIO9</text>
-  <line x1="1130" y1="586" x2="1146" y2="586" stroke="#6B7C83" stroke-width="1.4"/>
-  <circle cx="1151" cy="586" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
-  <text x="1120" y="619" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">GPIO21</text>
-  <line x1="1130" y1="614" x2="1146" y2="614" stroke="#6B7C83" stroke-width="1.4"/>
-  <circle cx="1151" cy="614" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
-  <text x="1163" y="575" font-size="12" fill="#6B7C83">вільні виводи</text>
-  <text x="1163" y="591" font-size="12" fill="#6B7C83">2 і 9 — strapping,</text>
-  <text x="1163" y="607" font-size="12" fill="#6B7C83">нічого не вішати</text>
-  <text x="893" y="620" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#6B7C83">GPIO8</text>
-  <polygon points="952,613 952,625 962,619" fill="#6B7C83"/>
-  <line x1="963" y1="611" x2="963" y2="627" stroke="#6B7C83" stroke-width="2"/>
-  <text x="972" y="624" font-size="12" fill="#6B7C83">вбудований</text>
-
-  <!-- ESP32 ground (battery return) -->
-  <line x1="880" y1="590" x2="380" y2="590" stroke="#14191B" stroke-width="2"/>
-  <circle cx="830" cy="590" r="4" fill="#14191B"/>
-  <line x1="830" y1="590" x2="830" y2="606" stroke="#14191B" stroke-width="2"/>
-  <line x1="807" y1="606" x2="853" y2="606" stroke="#14191B" stroke-width="2.4"/>
-  <line x1="816" y1="615" x2="844" y2="615" stroke="#14191B" stroke-width="2.4"/>
-  <line x1="824" y1="624" x2="836" y2="624" stroke="#14191B" stroke-width="2.4"/>
-
-  <!-- ===================== перемикач РЕБ ===================== -->
-  <line x1="880" y1="420" x2="380" y2="420" stroke="#14191B" stroke-width="2"/>
-  <circle cx="700" cy="420" r="4" fill="#14191B"/>
-  <line x1="700" y1="420" x2="700" y2="460" stroke="#14191B" stroke-width="2"/>
-  <circle cx="704" cy="460" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
-  <line x1="707" y1="457" x2="745" y2="440" stroke="#14191B" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="749" cy="460" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
-  <line x1="753" y1="460" x2="880" y2="460" stroke="#14191B" stroke-width="2"/>
-  <text x="790" y="406" text-anchor="middle" font-size="14" font-weight="700" fill="#14191B">перемикач РЕБ</text>
-  <text x="690" y="448" text-anchor="end" font-size="12.5" fill="#6B7C83">замкнено = розряд УВІМК</text>
-  <text x="690" y="466" text-anchor="end" font-size="12.5" fill="#6B7C83">INPUT_PULLDOWN, активний HIGH</text>
-
-  <!-- ===================== OLED ===================== -->
-  <line x1="880" y1="505" x2="380" y2="505" stroke="#1C5F90" stroke-width="2"/>
-  <line x1="880" y1="545" x2="380" y2="545" stroke="#1C5F90" stroke-width="2"/>
-  <text x="500" y="412" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#6B7C83">3.3 V</text>
-  <text x="500" y="497" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#1C5F90">SDA</text>
-  <text x="500" y="537" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#1C5F90">SCL</text>
-  <text x="500" y="582" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13" fill="#6B7C83">GND</text>
-
-  <rect x="60" y="356" width="320" height="274" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
-  <line x1="60" y1="400" x2="380" y2="400" stroke="#14191B" stroke-width="1.6"/>
-  <text x="220" y="387" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">OLED 1.3&#8243; SH1106</text>
-  <text x="370" y="425" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">VCC</text>
-  <text x="370" y="510" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">SDA</text>
-  <text x="370" y="550" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">SCL</text>
-  <text x="370" y="595" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="76" y="432" font-size="13" fill="#6B7C83">128 × 64, I²C, адреса 0x3C</text>
-  <text x="76" y="452" font-size="13" fill="#6B7C83">показує напругу збірки</text>
-  <text x="76" y="472" font-size="13" fill="#6B7C83">оновлення 4 рази на секунду</text>
-  <text x="76" y="508" font-size="12.5" font-weight="700" fill="#A03A1E">контролер SH1106, не SSD1306:</text>
-  <text x="76" y="526" font-size="12.5" fill="#A03A1E">драйвер SSD1306 дає зсув на 2 px</text>
-  <text x="76" y="562" font-size="12.5" fill="#6B7C83">не обов’язковий: якщо не відповів</text>
-  <text x="76" y="580" font-size="12.5" fill="#6B7C83">або завис — керування працює далі</text>
-  <text x="76" y="612" font-size="12.5" fill="#6B7C83">живиться з 3V3 плати, ~15–25 мА</text>
-
-  <!-- ===================== індикатор ===================== -->
-  <line x1="900" y1="655" x2="900" y2="712" stroke="#D14026" stroke-width="1.8"/>
-  <polygon points="880,712 920,712 900,742" fill="#D14026" stroke="#D14026" stroke-width="1.6" stroke-linejoin="round"/>
-  <line x1="878" y1="742" x2="922" y2="742" stroke="#D14026" stroke-width="2.6"/>
-  <line x1="900" y1="742" x2="900" y2="788" stroke="#D14026" stroke-width="1.8"/>
-  <text x="926" y="730" font-size="14" font-weight="700" fill="#D14026">червоний</text>
-  <text x="926" y="748" font-size="12.5" fill="#6B7C83">аварії</text>
-
-  <line x1="1010" y1="655" x2="1010" y2="712" stroke="#D9A81C" stroke-width="1.8"/>
-  <polygon points="990,712 1030,712 1010,742" fill="#D9A81C" stroke="#D9A81C" stroke-width="1.6" stroke-linejoin="round"/>
-  <line x1="988" y1="742" x2="1032" y2="742" stroke="#D9A81C" stroke-width="2.6"/>
-  <line x1="1010" y1="742" x2="1010" y2="788" stroke="#D9A81C" stroke-width="1.8"/>
-  <text x="1036" y="730" font-size="14" font-weight="700" fill="#B8900F">жовтий</text>
-  <text x="1036" y="748" font-size="12.5" fill="#6B7C83">готова</text>
-
-  <line x1="1120" y1="655" x2="1120" y2="712" stroke="#2FA360" stroke-width="1.8"/>
-  <polygon points="1100,712 1140,712 1120,742" fill="#2FA360" stroke="#2FA360" stroke-width="1.6" stroke-linejoin="round"/>
-  <line x1="1098" y1="742" x2="1142" y2="742" stroke="#2FA360" stroke-width="2.6"/>
-  <line x1="1120" y1="742" x2="1120" y2="788" stroke="#2FA360" stroke-width="1.8"/>
-  <text x="1146" y="730" font-size="14" font-weight="700" fill="#2FA360">зелений</text>
-  <text x="1146" y="748" font-size="12.5" fill="#6B7C83">працює</text>
-
-  <line x1="900" y1="788" x2="1120" y2="788" stroke="#14191B" stroke-width="2"/>
-  <circle cx="1010" cy="788" r="4" fill="#14191B"/>
-  <circle cx="1120" cy="788" r="4" fill="#14191B"/>
-  <line x1="1010" y1="788" x2="1010" y2="799" stroke="#14191B" stroke-width="2"/>
-  <line x1="987" y1="799" x2="1033" y2="799" stroke="#14191B" stroke-width="2.4"/>
-  <line x1="996" y1="808" x2="1024" y2="808" stroke="#14191B" stroke-width="2.4"/>
-  <line x1="1004" y1="817" x2="1016" y2="817" stroke="#14191B" stroke-width="2.4"/>
-  <text x="1152" y="793" font-size="13.5" font-weight="700" fill="#14191B">спільний мінус</text>
-  <text x="1152" y="811" font-size="12.5" fill="#6B7C83">резистори вбудовані (модуль 3–6 V)</text>
-
-  <!-- ===================== оптомодуль пульта ===================== -->
-  <rect x="1220" y="300" width="240" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
-  <line x1="1220" y1="344" x2="1460" y2="344" stroke="#14191B" stroke-width="1.6"/>
-  <text x="1340" y="331" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">Оптомодуль пульта</text>
-  <text x="1310" y="368" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8">VCC</text>
-  <text x="1230" y="395" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">RX1</text>
-  <text x="1230" y="445" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1B7860">TX1</text>
-  <text x="1230" y="495" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="1450" y="524" text-anchor="end" font-size="13.5" fill="#A87E14">TX 1310 / RX 1550 nm</text>
-
-  <!-- ESP32 <-> opto -->
-  <line x1="1130" y1="390" x2="1220" y2="390" stroke="#1C5F90" stroke-width="2" marker-end="url(#aTx)"/>
-  <text x="1175" y="379" text-anchor="middle" font-size="13" fill="#1C5F90">команда</text>
-  <line x1="1130" y1="440" x2="1220" y2="440" stroke="#1B7860" stroke-width="2"/>
-  <text x="1175" y="429" text-anchor="middle" font-size="13" fill="#1B7860">телеметрія</text>
-  <line x1="1130" y1="490" x2="1220" y2="490" stroke="#14191B" stroke-width="2"/>
-  <text x="1175" y="479" text-anchor="middle" font-size="13" fill="#6B7C83">земля</text>
-
-  <!-- ===================== волокно ===================== -->
-  <line x1="1460" y1="490" x2="1500" y2="490" stroke="#A87E14" stroke-width="4"/>
-  <line x1="1500" y1="490" x2="1500" y2="940" stroke="#A87E14" stroke-width="4"/>
-  <line x1="1500" y1="940" x2="1380" y2="940" stroke="#A87E14" stroke-width="4"/>
-  <line x1="1380" y1="940" x2="1380" y2="970" stroke="#A87E14" stroke-width="4"/>
-  <circle cx="1470" cy="490" r="6" fill="#FFFFFF" stroke="#A87E14" stroke-width="2.4"/>
-  <circle cx="1380" cy="964" r="6" fill="#FFFFFF" stroke="#A87E14" stroke-width="2.4"/>
-  <text x="1488" y="700" text-anchor="end" font-size="14" font-weight="700" fill="#A87E14">одне волокно</text>
-  <text x="1488" y="719" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13.5" fill="#A87E14">WDM · FC · 10–30 м</text>
-
-  <!-- ===================== межа розв'язки ===================== -->
-  <line x1="20" y1="905" x2="1520" y2="905" stroke="#14191B" stroke-width="1.3" stroke-dasharray="8 7" opacity="0.45"/>
-  <text x="30" y="893" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" letter-spacing="1.6" fill="#14191B" opacity="0.75">ГАЛЬВАНІЧНА РОЗВ’ЯЗКА</text>
-  <text x="330" y="893" font-size="13.5" fill="#6B7C83">межу перетинає тільки волокно — спільної землі немає</text>
-
-  <text x="820" y="952" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" letter-spacing="1.8" fill="#6B7C83">ВІДСІК АКБ</text>
-
-  <!-- ===================== JK BMS ===================== -->
-  <rect x="820" y="970" width="220" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
-  <line x1="820" y1="1012" x2="1040" y2="1012" stroke="#14191B" stroke-width="1.6"/>
-  <text x="930" y="1000" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">JK-B1A8S10P</text>
-  <text x="1030" y="1060" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">RX</text>
-  <text x="1030" y="1100" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1B7860">TX</text>
-  <text x="1030" y="1140" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#A03A1E">VBAT</text>
-  <text x="1030" y="1180" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="930" y="1240" text-anchor="middle" font-size="13.5" fill="#6B7C83">роз’єм GPS · JST SH 1.25</text>
-  <text x="930" y="1259" text-anchor="middle" font-size="12.5" fill="#A03A1E">розпіновка читається дзеркально</text>
-
-  <!-- ===================== дальній оптомодуль ===================== -->
-  <rect x="1180" y="970" width="240" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
-  <line x1="1180" y1="1012" x2="1420" y2="1012" stroke="#14191B" stroke-width="1.6"/>
-  <text x="1300" y="1000" text-anchor="middle" font-size="16" font-weight="700" fill="#14191B">Оптомодуль біля BMS</text>
-  <text x="1190" y="1060" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1C5F90">TX1</text>
-  <text x="1190" y="1100" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" font-weight="700" fill="#1B7860">RX1</text>
-  <text x="1190" y="1140" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8">VCC</text>
-  <text x="1190" y="1180" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#14191B">GND</text>
-  <text x="1410" y="1240" text-anchor="end" font-size="13.5" fill="#A87E14">TX 1550 / RX 1310 nm</text>
-
-  <!-- wires BMS <-> far module -->
-  <line x1="1040" y1="1055" x2="1180" y2="1055" stroke="#1C5F90" stroke-width="2"/>
-  <text x="1110" y="1044" text-anchor="middle" font-size="13" fill="#1C5F90">команда</text>
-  <line x1="1040" y1="1095" x2="1180" y2="1095" stroke="#1B7860" stroke-width="2"/>
-  <text x="1110" y="1084" text-anchor="middle" font-size="13" fill="#1B7860">телеметрія</text>
-  <line x1="1040" y1="1135" x2="1180" y2="1135" stroke="#A03A1E" stroke-width="2.6" marker-end="url(#aPw)"/>
-  <text x="1110" y="1124" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" font-weight="700" fill="#A03A1E">до 29.2 V</text>
-  <line x1="1040" y1="1175" x2="1180" y2="1175" stroke="#14191B" stroke-width="2"/>
-  <text x="1110" y="1164" text-anchor="middle" font-size="13" fill="#6B7C83">земля</text>
-
-  <!-- ===================== легенда індикації ===================== -->
-  <rect x="30" y="952" width="740" height="300" rx="5" fill="#F6F9F8" stroke="#D2DBD9" stroke-width="1.4"/>
-  <text x="52" y="988" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" letter-spacing="1.5" fill="#6B7C83">ІНДИКАЦІЯ — ОДНОЧАСНО СВІТИТЬСЯ РІВНО ОДИН КОЛІР</text>
-
-  <circle cx="68" cy="1022" r="9" fill="#D9A81C" stroke="#B8900F" stroke-width="1.4"/>
-  <text x="94" y="1027" font-size="14" font-weight="700" fill="#14191B">жовтий рівно</text>
-  <text x="250" y="1027" font-size="14" fill="#3B4A50">готова — аварій немає, розряд вимкнений</text>
-
-  <circle cx="68" cy="1060" r="9" fill="#2FA360" stroke="#227A47" stroke-width="1.4"/>
-  <text x="94" y="1065" font-size="14" font-weight="700" fill="#14191B">зелений рівно</text>
-  <text x="250" y="1065" font-size="14" fill="#3B4A50">працює — заряд понад 20 %</text>
-
-  <circle cx="68" cy="1098" r="9" fill="#FFFFFF" stroke="#2FA360" stroke-width="2.6" stroke-dasharray="4 3"/>
-  <text x="94" y="1103" font-size="14" font-weight="700" fill="#14191B">зелений мигає</text>
-  <text x="250" y="1103" font-size="14" fill="#3B4A50">працює — заряд 20 % і нижче</text>
-
-  <circle cx="68" cy="1136" r="9" fill="#D14026" stroke="#A03A1E" stroke-width="1.4"/>
-  <text x="94" y="1141" font-size="14" font-weight="700" fill="#14191B">червоний рівно</text>
-  <text x="250" y="1141" font-size="14" fill="#3B4A50">працює з аваріями — розряд увімкнений</text>
-
-  <circle cx="68" cy="1174" r="9" fill="#FFFFFF" stroke="#D14026" stroke-width="2.6" stroke-dasharray="4 3"/>
-  <text x="94" y="1179" font-size="14" font-weight="700" fill="#14191B">червоний мигає</text>
-  <text x="250" y="1179" font-size="14" fill="#3B4A50">зупинено з аваріями — розряд вимкнений</text>
-
-  <circle cx="56" cy="1212" r="7" fill="#FFFFFF" stroke="#D14026" stroke-width="2.2" stroke-dasharray="3 2.5"/>
-  <circle cx="74" cy="1212" r="7" fill="#FFFFFF" stroke="#D9A81C" stroke-width="2.2" stroke-dasharray="3 2.5"/>
-  <circle cx="92" cy="1212" r="7" fill="#FFFFFF" stroke="#2FA360" stroke-width="2.2" stroke-dasharray="3 2.5"/>
-  <text x="112" y="1217" font-size="14" font-weight="700" fill="#14191B">усі три, 300 мс</text>
-  <text x="250" y="1217" font-size="14" fill="#3B4A50">немає зв’язку з BMS понад 5 с — пріоритет над усім</text>
-
-  <text x="52" y="1243" font-size="12.5" fill="#6B7C83">Стан береться з фактичного положення ключа, що повідомляє BMS, а не з положення перемикача.</text>
-
-
-
+  <text x="726" y="188" text-anchor="middle" font-size="15" fill="#14191B" font-weight="700">DC-DC BS02 V4</text>
+  <text x="726" y="210" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8" font-weight="700">5 V</text>
+  <line x1="812" y1="72" x2="1450" y2="72" stroke="#7A4FA8" stroke-width="2"/>
+  <line x1="1450" y1="72" x2="1450" y2="480" stroke="#7A4FA8" stroke-width="2"/>
+  <line x1="1450" y1="480" x2="1360" y2="480" stroke="#7A4FA8" stroke-width="2"/>
+  <text x="1120" y="60" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8" font-weight="700">+12 V</text>
+  <line x1="812" y1="192" x2="940" y2="192" stroke="#7A4FA8" stroke-width="2"/>
+  <line x1="940" y1="192" x2="940" y2="400" stroke="#7A4FA8" stroke-width="2"/>
+  <line x1="940" y1="400" x2="880" y2="400" stroke="#7A4FA8" stroke-width="2"/>
+  <text x="952" y="250" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#7A4FA8" font-weight="700">+5 V</text>
+  <rect x="620" y="330" width="260" height="370" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="620" y1="366" x2="880" y2="366" stroke="#14191B" stroke-width="1.6"/>
+  <text x="750" y="355" text-anchor="middle" font-size="17" fill="#14191B" font-weight="700">ESP32-C3 Super Mini</text>
+  <text x="632" y="405" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#D14026" font-weight="700">GPIO5</text>
+  <text x="632" y="445" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#B8900F" font-weight="700">GPIO6</text>
+  <text x="632" y="485" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#2FA360" font-weight="700">GPIO7</text>
+  <text x="632" y="525" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#6B7C83">GPIO8</text>
+  <text x="632" y="565" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#6B7C83">GPIO9</text>
+  <text x="632" y="605" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">GPIO10</text>
+  <text x="632" y="645" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">GPIO20</text>
+  <text x="632" y="685" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#6B7C83">GPIO21</text>
+  <text x="868" y="405" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#7A4FA8" font-weight="700">5V</text>
+  <text x="868" y="445" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B" font-weight="700">GND</text>
+  <text x="868" y="485" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B" font-weight="700">3V3</text>
+  <text x="868" y="525" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">GPIO4</text>
+  <text x="868" y="565" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1B7860" font-weight="700">GPIO3</text>
+  <text x="868" y="605" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#6B7C83">GPIO2</text>
+  <text x="868" y="645" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B" font-weight="700">GPIO1</text>
+  <text x="868" y="685" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#6B7C83">GPIO0</text>
+  <polygon points="706,514 706,526 716,520" fill="#6B7C83"/>
+  <line x1="717" y1="512" x2="717" y2="528" stroke="#6B7C83" stroke-width="2"/>
+  <text x="726" y="525" font-size="12" fill="#6B7C83">вбудований</text>
+  <line x1="620" y1="400" x2="560" y2="400" stroke="#D14026" stroke-width="1.8"/>
+  <polygon points="560,387 560,413 530,400" fill="#D14026" stroke="#D14026" stroke-width="1.6" stroke-linejoin="round"/>
+  <line x1="530" y1="385" x2="530" y2="415" stroke="#D14026" stroke-width="2.6"/>
+  <line x1="530" y1="400" x2="480" y2="400" stroke="#D14026" stroke-width="1.8"/>
+  <text x="468" y="398" text-anchor="end" font-size="13.5" fill="#D14026" font-weight="700">червоний</text>
+  <text x="468" y="415" text-anchor="end" font-size="12" fill="#6B7C83">аварії</text>
+  <line x1="620" y1="440" x2="560" y2="440" stroke="#D9A81C" stroke-width="1.8"/>
+  <polygon points="560,427 560,453 530,440" fill="#D9A81C" stroke="#D9A81C" stroke-width="1.6" stroke-linejoin="round"/>
+  <line x1="530" y1="425" x2="530" y2="455" stroke="#D9A81C" stroke-width="2.6"/>
+  <line x1="530" y1="440" x2="480" y2="440" stroke="#D9A81C" stroke-width="1.8"/>
+  <text x="468" y="438" text-anchor="end" font-size="13.5" fill="#B8900F" font-weight="700">жовтий</text>
+  <text x="468" y="455" text-anchor="end" font-size="12" fill="#6B7C83">готова</text>
+  <line x1="620" y1="480" x2="560" y2="480" stroke="#2FA360" stroke-width="1.8"/>
+  <polygon points="560,467 560,493 530,480" fill="#2FA360" stroke="#2FA360" stroke-width="1.6" stroke-linejoin="round"/>
+  <line x1="530" y1="465" x2="530" y2="495" stroke="#2FA360" stroke-width="2.6"/>
+  <line x1="530" y1="480" x2="480" y2="480" stroke="#2FA360" stroke-width="1.8"/>
+  <text x="468" y="478" text-anchor="end" font-size="13.5" fill="#2FA360" font-weight="700">зелений</text>
+  <text x="468" y="495" text-anchor="end" font-size="12" fill="#6B7C83">працює</text>
+  <line x1="480" y1="400" x2="480" y2="496" stroke="#14191B" stroke-width="2"/>
+  <circle cx="480" cy="440" r="4" fill="#14191B"/>
+  <circle cx="480" cy="480" r="4" fill="#14191B"/>
+  <line x1="457" y1="496" x2="503" y2="496" stroke="#14191B" stroke-width="2.4"/>
+  <line x1="466" y1="505" x2="494" y2="505" stroke="#14191B" stroke-width="2.4"/>
+  <line x1="474" y1="514" x2="486" y2="514" stroke="#14191B" stroke-width="2.4"/>
+  <text x="512" y="524" font-size="12.5" fill="#14191B" font-weight="700">спільний мінус</text>
+  <text x="512" y="541" font-size="12" fill="#6B7C83">резистори в індикаторі</text>
+  <line x1="620" y1="560" x2="596" y2="560" stroke="#6B7C83" stroke-width="1.4"/>
+  <circle cx="590" cy="560" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
+  <line x1="620" y1="680" x2="596" y2="680" stroke="#6B7C83" stroke-width="1.4"/>
+  <circle cx="590" cy="680" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
+  <text x="576" y="622" text-anchor="end" font-size="12" fill="#6B7C83">вільні виводи</text>
+  <rect x="150" y="556" width="300" height="184" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="150" y1="592" x2="450" y2="592" stroke="#14191B" stroke-width="1.6"/>
+  <text x="300" y="581" text-anchor="middle" font-size="16" fill="#14191B" font-weight="700">OLED 1.3&#8243; SH1106</text>
+  <text x="438" y="605" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">SDA</text>
+  <text x="438" y="645" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">SCL</text>
+  <text x="162" y="621" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B">VCC</text>
+  <text x="162" y="661" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B">GND</text>
+  <text x="166" y="686" font-size="12" fill="#6B7C83">128 × 64, адреса 0x3C</text>
+  <text x="166" y="703" font-size="12" fill="#6B7C83">показує напругу збірки</text>
+  <text x="166" y="726" font-size="12" fill="#A03A1E" font-weight="700">SH1106, не SSD1306</text>
+  <line x1="620" y1="600" x2="450" y2="600" stroke="#1C5F90" stroke-width="2"/>
+  <line x1="620" y1="640" x2="450" y2="640" stroke="#1C5F90" stroke-width="2"/>
+  <line x1="200" y1="556" x2="200" y2="530" stroke="#14191B" stroke-width="2"/>
+  <line x1="200" y1="544" x2="200" y2="530" stroke="#14191B" stroke-width="2"/>
+  <line x1="184" y1="530" x2="216" y2="530" stroke="#14191B" stroke-width="2.4"/>
+  <text x="200" y="524" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12" fill="#6B7C83">3V3</text>
+  <line x1="260" y1="740" x2="260" y2="758" stroke="#14191B" stroke-width="2"/>
+  <line x1="237" y1="758" x2="283" y2="758" stroke="#14191B" stroke-width="2.4"/>
+  <line x1="246" y1="767" x2="274" y2="767" stroke="#14191B" stroke-width="2.4"/>
+  <line x1="254" y1="776" x2="266" y2="776" stroke="#14191B" stroke-width="2.4"/>
+  <line x1="880" y1="480" x2="920" y2="480" stroke="#14191B" stroke-width="2"/>
+  <line x1="920" y1="480" x2="920" y2="452" stroke="#14191B" stroke-width="2"/>
+  <line x1="920" y1="466" x2="920" y2="452" stroke="#14191B" stroke-width="2"/>
+  <line x1="904" y1="452" x2="936" y2="452" stroke="#14191B" stroke-width="2.4"/>
+  <text x="920" y="446" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12" fill="#6B7C83">3V3</text>
+  <line x1="880" y1="600" x2="906" y2="600" stroke="#6B7C83" stroke-width="1.4"/>
+  <circle cx="912" cy="600" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
+  <line x1="880" y1="680" x2="906" y2="680" stroke="#6B7C83" stroke-width="1.4"/>
+  <circle cx="912" cy="680" r="4" fill="#FFFFFF" stroke="#6B7C83" stroke-width="1.4"/>
+  <text x="926" y="585" font-size="12" fill="#6B7C83">вільні виводи</text>
+  <text x="926" y="602" font-size="12" fill="#6B7C83">2 і 9 — strapping,</text>
+  <text x="926" y="619" font-size="12" fill="#6B7C83">нічого не вішати</text>
+  <line x1="880" y1="640" x2="960" y2="640" stroke="#14191B" stroke-width="2"/>
+  <line x1="960" y1="640" x2="960" y2="742" stroke="#14191B" stroke-width="2"/>
+  <circle cx="964" cy="742" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
+  <line x1="967" y1="739" x2="1005" y2="722" stroke="#14191B" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="1010" cy="742" r="4.5" fill="#FFFFFF" stroke="#14191B" stroke-width="2"/>
+  <line x1="1014" y1="742" x2="1060" y2="742" stroke="#14191B" stroke-width="2"/>
+  <line x1="1060" y1="742" x2="1060" y2="716" stroke="#14191B" stroke-width="2"/>
+  <line x1="1060" y1="730" x2="1060" y2="716" stroke="#14191B" stroke-width="2"/>
+  <line x1="1044" y1="716" x2="1076" y2="716" stroke="#14191B" stroke-width="2.4"/>
+  <text x="1060" y="710" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12" fill="#6B7C83">3V3</text>
+  <text x="1012" y="782" text-anchor="middle" font-size="14" fill="#14191B" font-weight="700">перемикач РЕБ</text>
+  <text x="1012" y="800" text-anchor="middle" font-size="12.5" fill="#6B7C83">замкнено = розряд УВІМК</text>
+  <rect x="1120" y="400" width="240" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="1120" y1="436" x2="1360" y2="436" stroke="#14191B" stroke-width="1.6"/>
+  <text x="1240" y="425" text-anchor="middle" font-size="16" fill="#14191B" font-weight="700">Оптомодуль пульта</text>
+  <text x="1132" y="485" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B">GND</text>
+  <text x="1132" y="525" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">RX1</text>
+  <text x="1132" y="565" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1B7860" font-weight="700">TX1</text>
+  <text x="1348" y="485" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#7A4FA8">VCC</text>
+  <text x="1348" y="620" text-anchor="end" font-size="12.5" fill="#A87E14">TX 1310 / RX 1550 nm</text>
+  <line x1="880" y1="440" x2="1120" y2="440" stroke="#14191B" stroke-width="2"/>
+  <text x="1000" y="430" text-anchor="middle" font-size="12.5" fill="#6B7C83">земля</text>
+  <line x1="880" y1="520" x2="1113" y2="520" stroke="#1C5F90" stroke-width="2" marker-end="url(#aTx)"/>
+  <text x="1000" y="510" text-anchor="middle" font-size="13" fill="#1C5F90">команда</text>
+  <line x1="880" y1="560" x2="1120" y2="560" stroke="#1B7860" stroke-width="2"/>
+  <text x="1000" y="550" text-anchor="middle" font-size="13" fill="#1B7860">телеметрія</text>
+  <line x1="1360" y1="600" x2="1470" y2="600" stroke="#A87E14" stroke-width="4"/>
+  <line x1="1470" y1="600" x2="1470" y2="866" stroke="#A87E14" stroke-width="4"/>
+  <line x1="1470" y1="866" x2="1240" y2="866" stroke="#A87E14" stroke-width="4"/>
+  <line x1="1240" y1="866" x2="1240" y2="886" stroke="#A87E14" stroke-width="4"/>
+  <circle cx="1400" cy="600" r="6" fill="#FFFFFF" stroke="#A87E14" stroke-width="2.4"/>
+  <circle cx="1240" cy="880" r="6" fill="#FFFFFF" stroke="#A87E14" stroke-width="2.4"/>
+  <text x="1458" y="690" text-anchor="end" font-size="14" fill="#A87E14" font-weight="700">одне волокно</text>
+  <text x="1458" y="709" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13.5" fill="#A87E14">WDM · FC · 10–30 м</text>
+  <line x1="20" y1="832" x2="1520" y2="832" stroke="#14191B" stroke-width="1.3" stroke-dasharray="8 7" opacity="0.45"/>
+  <text x="30" y="820" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14" fill="#14191B" letter-spacing="1.6" opacity="0.75">ГАЛЬВАНІЧНА РОЗВ&#8217;ЯЗКА</text>
+  <text x="330" y="820" font-size="13.5" fill="#6B7C83">межу перетинає тільки волокно — спільної землі немає</text>
+  <text x="820" y="872" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="15" fill="#6B7C83" letter-spacing="1.8">ВІДСІК АКБ</text>
+  <rect x="820" y="886" width="220" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="820" y1="928" x2="1040" y2="928" stroke="#14191B" stroke-width="1.6"/>
+  <text x="930" y="916" text-anchor="middle" font-size="16" fill="#14191B" font-weight="700">JK-B1A8S10P</text>
+  <text x="1028" y="976" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">RX</text>
+  <text x="1028" y="1016" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1B7860" font-weight="700">TX</text>
+  <text x="1028" y="1056" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#A03A1E" font-weight="700">VBAT</text>
+  <text x="1028" y="1096" text-anchor="end" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B">GND</text>
+  <text x="930" y="1156" text-anchor="middle" font-size="13.5" fill="#6B7C83">роз&#8217;єм GPS · JST SH 1.25</text>
+  <text x="930" y="1174" text-anchor="middle" font-size="12.5" fill="#A03A1E">розпіновка читається дзеркально</text>
+  <rect x="1120" y="886" width="240" height="240" rx="5" fill="#FFFFFF" stroke="#14191B" stroke-width="1.8"/>
+  <line x1="1120" y1="928" x2="1360" y2="928" stroke="#14191B" stroke-width="1.6"/>
+  <text x="1240" y="916" text-anchor="middle" font-size="16" fill="#14191B" font-weight="700">Оптомодуль біля BMS</text>
+  <text x="1132" y="976" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1C5F90" font-weight="700">TX1</text>
+  <text x="1132" y="1016" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#1B7860" font-weight="700">RX1</text>
+  <text x="1132" y="1056" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#7A4FA8">VCC</text>
+  <text x="1132" y="1096" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="14.5" fill="#14191B">GND</text>
+  <text x="1348" y="1156" text-anchor="end" font-size="13.5" fill="#A87E14">TX 1550 / RX 1310 nm</text>
+  <line x1="1040" y1="971" x2="1113" y2="971" stroke="#1C5F90" stroke-width="2" marker-end="url(#aTx)"/>
+  <text x="1080" y="960" text-anchor="middle" font-size="13" fill="#1C5F90">команда</text>
+  <line x1="1040" y1="1011" x2="1120" y2="1011" stroke="#1B7860" stroke-width="2"/>
+  <text x="1080" y="1000" text-anchor="middle" font-size="13" fill="#1B7860">телеметрія</text>
+  <line x1="1040" y1="1051" x2="1113" y2="1051" stroke="#A03A1E" stroke-width="2.6" marker-end="url(#aWn)"/>
+  <text x="1080" y="1040" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="12.5" fill="#A03A1E" font-weight="700">до 29.2 V</text>
+  <line x1="1040" y1="1091" x2="1120" y2="1091" stroke="#14191B" stroke-width="2"/>
+  <text x="1080" y="1080" text-anchor="middle" font-size="13" fill="#6B7C83">земля</text>
+  <rect x="30" y="872" width="740" height="268" rx="5" fill="#F6F9F8" stroke="#D2DBD9" stroke-width="1.4"/>
+  <text x="400" y="900" text-anchor="middle" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="13.5" fill="#6B7C83" letter-spacing="1.2">ІНДИКАЦІЯ — ОДНОЧАСНО СВІТИТЬСЯ РІВНО ОДИН КОЛІР</text>
+  <circle cx="68" cy="936" r="9" fill="#D9A81C" stroke="#B8900F" stroke-width="1.4"/>
+  <text x="94" y="941" font-size="14" fill="#14191B" font-weight="700">жовтий рівно</text>
+  <text x="250" y="941" font-size="14" fill="#3B4A50">готова — аварій немає, розряд вимкнений</text>
+  <circle cx="68" cy="974" r="9" fill="#2FA360" stroke="#2FA360" stroke-width="1.4"/>
+  <text x="94" y="979" font-size="14" fill="#14191B" font-weight="700">зелений рівно</text>
+  <text x="250" y="979" font-size="14" fill="#3B4A50">працює — заряд понад 20 %</text>
+  <circle cx="68" cy="1012" r="9" fill="#FFFFFF" stroke="#2FA360" stroke-width="2.6" stroke-dasharray="4 3"/>
+  <text x="94" y="1017" font-size="14" fill="#14191B" font-weight="700">зелений мигає</text>
+  <text x="250" y="1017" font-size="14" fill="#3B4A50">працює — заряд 20 % і нижче</text>
+  <circle cx="68" cy="1050" r="9" fill="#D14026" stroke="#D14026" stroke-width="1.4"/>
+  <text x="94" y="1055" font-size="14" fill="#14191B" font-weight="700">червоний рівно</text>
+  <text x="250" y="1055" font-size="14" fill="#3B4A50">працює з аваріями — розряд увімкнений</text>
+  <circle cx="68" cy="1088" r="9" fill="#FFFFFF" stroke="#D14026" stroke-width="2.6" stroke-dasharray="4 3"/>
+  <text x="94" y="1093" font-size="14" fill="#14191B" font-weight="700">червоний мигає</text>
+  <text x="250" y="1093" font-size="14" fill="#3B4A50">зупинено з аваріями — розряд вимкнений</text>
+  <circle cx="56" cy="1126" r="7" fill="#FFFFFF" stroke="#D14026" stroke-width="2.2" stroke-dasharray="3 2.5"/>
+  <circle cx="74" cy="1126" r="7" fill="#FFFFFF" stroke="#D9A81C" stroke-width="2.2" stroke-dasharray="3 2.5"/>
+  <circle cx="92" cy="1126" r="7" fill="#FFFFFF" stroke="#2FA360" stroke-width="2.2" stroke-dasharray="3 2.5"/>
+  <text x="112" y="1131" font-size="14" fill="#14191B" font-weight="700">усі три, 300 мс</text>
+  <text x="250" y="1131" font-size="14" fill="#3B4A50">немає зв&#8217;язку з BMS понад 5 с — пріоритет над усім</text>
 </svg>
