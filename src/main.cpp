@@ -207,6 +207,7 @@ bool remoteRateValid = false;      // Чи накопичилось даних �
 // Корпус альбомний, модуль стоїть прямо: без повороту, полотно 128 x 64.
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
 bool oledPresent = false;          // Чи відгукнувся дисплей на шині
+int oledSdaIdle = -1, oledSclIdle = -1; // Рівні шини при останній спробі
 uint8_t oledFailCount = 0;         // Поспіль невдалих/задовгих оновлень
 
 bool lastStablePressed = false;
@@ -589,20 +590,7 @@ void processBmsResponses() {
 
         parseTelemetryData(rxBuf, rxIdx);
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
-        Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s | AP = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
-            bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
-            bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
-            oledPresent ? "ok" : "--",
-#if WIFI_AP_ENABLED
-            apUp ? WiFi.softAPIP().toString().c_str() : "down",
-#else
-            "off",
-#endif
-            remoteBatteryV,
-            (unsigned long)remoteBatteryRawMv,
-            remoteCharging ? "zaryad" : "rozryad",
-            remoteRateValid ? remoteRatePctPerH : 0.0f, ledState);
+
       }
       rxIdx = 0;
       expectedLen = 0;
@@ -633,6 +621,8 @@ void setupOled() {
   delay(5);
   int sdaIdle = digitalRead(OLED_SDA_PIN);
   int sclIdle = digitalRead(OLED_SCL_PIN);
+  oledSdaIdle = sdaIdle;
+  oledSclIdle = sclIdle;
   Serial.printf("OLED: idle levels SDA=%d SCL=%d\n", sdaIdle, sclIdle);
 
   if (sdaIdle == LOW || sclIdle == LOW) {
@@ -640,6 +630,7 @@ void setupOled() {
     return;
   }
 
+  Wire.end(); // на випадок повторної спроби
   Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_HZ);
   Wire.setTimeOut(50);
   Serial.println("OLED: Wire started, probing...");
@@ -755,6 +746,25 @@ void applyDischargeCommand(bool on, const char *source) {
   Serial.printf(">>> DISCHARGE %s (%s) <<<\n", on ? "ON" : "OFF", source);
 }
 
+// Друкується за таймером, незалежно від того, чи відповідає BMS.
+// Раніше рядок виходив лише при розборі кадру, тож обрив зв язку
+// гасив увесь лог — рівно в той момент, коли він найпотрібніший.
+void printStatus() {
+        Serial.printf(
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s(%d%d) | AP = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
+            bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
+            bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
+            oledPresent ? "ok" : "--", oledSdaIdle, oledSclIdle,
+#if WIFI_AP_ENABLED
+            apUp ? WiFi.softAPIP().toString().c_str() : "down",
+#else
+            "off",
+#endif
+            remoteBatteryV,
+            (unsigned long)remoteBatteryRawMv,
+            remoteCharging ? "zaryad" : "rozryad",
+            remoteRateValid ? remoteRatePctPerH : 0.0f, ledState);
+}
 void buildUiLines() {
   char buf[40];
 
@@ -797,7 +807,9 @@ void buildUiLines() {
     }
     snprintf(uiLine[3], sizeof(uiLine[3]), "%s", buf);
   } else {
-    uiLine[3][0] = 0;
+    // Лампи блимають, але екран мовчав про причину. Треба назвати словами:
+    // мигання само по собі не каже, що саме сталося.
+    snprintf(uiLine[3], sizeof(uiLine[3]), "Немає зв'язку");
   }
 }
 
@@ -1100,6 +1112,22 @@ void loop() {
   if (millis() - lastUiMs >= 250) {
     lastUiMs = millis();
     buildUiLines();
+  }
+
+  static unsigned long lastStatusMs = 0;
+  if (millis() - lastStatusMs >= 1000) {
+    lastStatusMs = millis();
+    printStatus();
+  }
+
+  // Дисплей міг не відповісти на старті або відвалитися пізніше.
+  // Пробуємо знайти його знову, щоб він піднявся без перезавантаження.
+  if (!oledPresent) {
+    static unsigned long lastProbeMs = 0;
+    if (millis() - lastProbeMs >= 5000) {
+      lastProbeMs = millis();
+      setupOled();
+    }
   }
   updateOled();
 
