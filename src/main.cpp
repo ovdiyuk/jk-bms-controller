@@ -5,6 +5,9 @@
 #include <WiFi.h>
 #include <Wire.h>
 
+// Типи акумуляторів — редагується без втручання в код
+#include "packs.h"
+
 // ===== JK BMS UART control (old "NW" TTL protocol, GPS port, 115200 8N1) =====
 // RED/YELLOW/GREEN indicator, common cathode, built-in resistors (3-6 V module).
 // Latching switch on GPIO1 -> 3.3 V (INPUT_PULLDOWN)
@@ -183,8 +186,17 @@ float bmsMinCellV = 3.300f;
 float bmsMaxCellV = 3.300f;
 float bmsCellDeltaV = 0.000f;
 uint8_t bmsSocPercent = 100;
+uint8_t bmsCellCount = 0;          // Скільки комірок у пакеті, з тега 0x79
 
 unsigned long lastBmsRxMs = 0;     // Час останньої відповіді від BMS
+
+// Три числа за секунду розділяють обрив на боці оптики від обриву на боці
+// протоколу: нуль байтів означає, що з модуля взагалі нічого не виходить,
+// байти без кадрів — що щось передається, але не те, а кадри без розбору —
+// що говорить не BMS. Скидаються після кожного рядка статусу.
+unsigned long rxBytes = 0;   // Байтів з Serial1 за інтервал
+unsigned long rxJunk = 0;    // З них відкинуто при пошуку заголовка
+unsigned long rxFrames = 0;  // Кадрів телеметрії, що дійшли до розбору
 bool bmsConnected = false;          // Прапорець наявності зв'язку з BMS
 const char *ledState = "?";        // Поточний стан індикатора, для логу
 const char *ledWeb = "nc";         // Короткий код стану для веба
@@ -273,10 +285,22 @@ void updateNoConnectionBlink() {
   digitalWrite(LED_PIN_GREEN, phase == 2 ? HIGH : LOW);
 }
 
+// Профіль пакета за кількістю комірок. Поки BMS не відповіла, кількість
+// нульова і профілю немає — напругу комірки тоді не оцінюємо взагалі:
+// вигадати поріг гірше, ніж промовчати. Таблиця — у include/packs.h.
+const PackProfile *activePackProfile() {
+  for (uint8_t i = 0; i < PACK_PROFILE_COUNT; i++)
+    if (PACK_PROFILES[i].cells == bmsCellCount) return &PACK_PROFILES[i];
+  return nullptr;
+}
+
 // Визначення активного коду помилки (1..6) за реальними фізичними параметрами
 uint8_t determineActiveFaultCode() {
-  // 1: Перенапруга / Перерозряд осередку (<2.60V або >3.65V)
-  if (bmsMinCellV > 0.5f && (bmsMinCellV < 2.60f || bmsMaxCellV > 3.65f)) return 1;
+  // 1: Перенапруга / Перерозряд осередку
+  const PackProfile *pack = activePackProfile();
+  if (pack != nullptr && bmsMinCellV > 0.5f &&
+      (bmsMinCellV < pack->cellMinV || bmsMaxCellV > pack->cellMaxV))
+    return 1;
 
   // 2: Перевищення струму розряду / заряду (>120A)
   if (fabs(bmsCurrentA) > 120.0f) return 2;
@@ -453,6 +477,7 @@ void parseTelemetryData(const uint8_t *buf, uint16_t len) {
       }
       if (minV < 90.0f) bmsMinCellV = minV;
       if (maxV > 0.0f) bmsMaxCellV = maxV;
+      if (cellCount > 0) bmsCellCount = cellCount;
       bmsCellDeltaV = bmsMaxCellV - bmsMinCellV;
 
       k += 2 + cellLen; // Пропускаємо тег, байт довжини та самі напруги
@@ -551,11 +576,15 @@ void processBmsResponses() {
 
   while (Serial1.available()) {
     uint8_t b = Serial1.read();
+    rxBytes++;
 
     // Синхронізація кадру за заголовком 0x4E 0x57
-    if (rxIdx == 0 && b != 0x4E)
+    if (rxIdx == 0 && b != 0x4E) {
+      rxJunk++;
       continue;
+    }
     if (rxIdx == 1 && b != 0x57) {
+      rxJunk++;
       rxIdx = 0;
       continue;
     }
@@ -598,6 +627,7 @@ void processBmsResponses() {
         Serial.println();
 
         parseTelemetryData(rxBuf, rxIdx);
+        rxFrames++;
         lastBmsRxMs = millis(); // Оновлюємо час останньої відповіді
 
       }
@@ -806,9 +836,10 @@ void applyDischargeCommand(bool on, const char *source) {
 // гасив увесь лог — рівно в той момент, коли він найпотрібніший.
 void printStatus() {
         Serial.printf(
-            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Cap = %.0fAh | DSG = %s | OLED = %s(%d%d) | AP = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
+            "BMS Status: Pack = %.2f V | Current = %.2f A | SOC = %d%% | Temp = %.1f C | MinV = %.3f V | MaxV = %.3f V | DeltaV = %.3f V | Pack = %s | RX = %luB/%luj/%luf | Cap = %.0fAh | DSG = %s | OLED = %s(%d%d) | AP = %s | PULT = %.2f V (%lu mV, %s, %+.1f%%/h) | LED: %s\n",
             bmsPackVoltageV, bmsCurrentA, bmsSocPercent, bmsTempC, bmsMinCellV, bmsMaxCellV, bmsCellDeltaV,
-            bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
+            activePackProfile() ? activePackProfile()->name : "?",
+            rxBytes, rxJunk, rxFrames, bmsCapacityAh, bmsActualDischargeState ? "ON " : "OFF",
             oledPresent ? "ok" : "--", oledSdaIdle, oledSclIdle,
 #if WIFI_AP_ENABLED
             apUp ? WiFi.softAPIP().toString().c_str() : "down",
@@ -1178,6 +1209,7 @@ void loop() {
   if (millis() - lastStatusMs >= 1000) {
     lastStatusMs = millis();
     printStatus();
+    rxBytes = rxJunk = rxFrames = 0;
   }
 
   // Дисплей міг не відповісти на старті або відвалитися пізніше.
