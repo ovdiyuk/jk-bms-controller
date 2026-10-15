@@ -134,8 +134,11 @@ const float STEP_THRESHOLD_V = 0.050f;
 // стрибала — саме це й виглядало як девіація.
 const uint8_t RATE_SLOTS = 10;
 const unsigned long RATE_SAMPLE_MS = 30000;
-const unsigned long RATE_MIN_SPAN_MS = 60000; // раніше хвилини не рахуємо
-const float RATE_MIN_PCT_PER_H = 1.0f;        // нижче — вважаємо спокоєм
+// Відсоток — ціле число, тож один крок квантування на короткому вікні
+// дає фантомну швидкість: 1 % за 60 с це вже 60 %/год з нічого.
+// Тому чекаємо, поки вікно заповниться повністю: на 5 хвилинах той самий
+// крок дає 12 %/год, що вже тоне в усередненні.
+const float RATE_MIN_PCT_PER_H = 5.0f;        // нижче — вважаємо спокоєм
 
 // Поверх вікна — ковзне середнє швидкості по 5 оцінках. Усереднюємо саме
 // швидкість, а не час: час це залишок/швидкість, і біля нуля він злітає
@@ -706,8 +709,11 @@ void setupOled() {
 // Таблиця — напруга спокою; під навантаженням показання занижене, одразу
 // після зарядки — завищене, доки банка не осяде.
 uint8_t liPoPercent(float v) {
+  // Низ таблиці — звичайна крива Li-Po і не рухається. Верх підігнаний
+  // під цей пульт: зарядка гасне на 4.16 В, а не на паспортних 4.20,
+  // тож інакше повний акумулятор показувався б як 96 %.
   static const float tabV[] = {3.00f, 3.30f, 3.50f, 3.60f, 3.70f,
-                               3.80f, 3.90f, 4.00f, 4.10f, 4.20f};
+                               3.80f, 3.90f, 4.00f, 4.08f, 4.16f};
   static const uint8_t tabP[] = {0, 5, 10, 20, 35, 50, 65, 80, 90, 100};
   const uint8_t n = sizeof(tabP);
 
@@ -965,29 +971,30 @@ void updateRemoteBattery() {
 
       // Найстаріший зразок у вікні. Вікно ковзає, тож швидкість міняється
       // плавно, без стрибка на межі.
-      if (histCount >= 2) {
+      // Тільки на повному вікні: на частковому крок квантування відсотка
+      // перетворюється на фантомний заряд. Ціна — перші 5 хвилин після
+      // вмикання швидкості немає, і час береться з моделі.
+      if (histCount >= RATE_SLOTS) {
         uint8_t oldest =
             (uint8_t)((histHead + RATE_SLOTS - histCount) % RATE_SLOTS);
         unsigned long span = nowMs - histMs[oldest];
-        if (span >= RATE_MIN_SPAN_MS) {
-          float hours = (float)span / 3600000.0f;
-          float raw = ((float)pctNow - (float)histPct[oldest]) / hours;
+        float hours = (float)span / 3600000.0f;
+        float raw = ((float)pctNow - (float)histPct[oldest]) / hours;
 
-          rateRing[rateHead] = raw;
-          rateHead = (uint8_t)((rateHead + 1) % RATE_AVG_SLOTS);
-          if (rateCount < RATE_AVG_SLOTS) rateCount++;
+        rateRing[rateHead] = raw;
+        rateHead = (uint8_t)((rateHead + 1) % RATE_AVG_SLOTS);
+        if (rateCount < RATE_AVG_SLOTS) rateCount++;
 
-          float sum = 0.0f;
-          for (uint8_t i = 0; i < rateCount; i++) sum += rateRing[i];
-          remoteRatePctPerH = sum / (float)rateCount;
-          remoteRateValid = true;
+        float sum = 0.0f;
+        for (uint8_t i = 0; i < rateCount; i++) sum += rateRing[i];
+        remoteRatePctPerH = sum / (float)rateCount;
+        remoteRateValid = true;
 
-          // Знак усередненої швидкості — ознака напрямку. Працює й тоді,
-          // коли пульт увімкнули з уже підключеною зарядкою.
-          if (remoteRatePctPerH > RATE_MIN_PCT_PER_H) remoteCharging = true;
-          else if (remoteRatePctPerH < -RATE_MIN_PCT_PER_H)
-            remoteCharging = false;
-        }
+        // Знак усередненої швидкості — ознака напрямку. Працює й тоді,
+        // коли пульт увімкнули з уже підключеною зарядкою.
+        if (remoteRatePctPerH > RATE_MIN_PCT_PER_H) remoteCharging = true;
+        else if (remoteRatePctPerH < -RATE_MIN_PCT_PER_H)
+          remoteCharging = false;
       }
     }
   }
