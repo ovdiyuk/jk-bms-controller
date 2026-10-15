@@ -26,7 +26,7 @@
 //   GREEN  blink - running: no faults, discharge ON, SOC <= 20%
 //   RED    solid - running with faults: faults present, discharge ON
 //   RED    blink - stopped with faults: faults present, discharge OFF
-//   all three blink at 300 ms - no link to the BMS
+//   red -> yellow -> green chase at 300 ms - no link to the BMS
 // - Common GND between the MCU and its optical module only.
 //   The BMS side is galvanically isolated: the link is a single WDM fiber.
 
@@ -171,7 +171,7 @@ const unsigned long LED_BLINK_INTERVAL_MS =
     500; // Інтервал мигання зеленого і червоного (мс)
 
 const unsigned long BMS_TIMEOUT_MS = 5000; // Таймаут зв'язку з BMS (мс)
-const unsigned long NO_CONN_BLINK_MS = 300; // Інтервал мигання при відсутності зв'язку (мс)
+const unsigned long NO_CONN_STEP_MS = 300; // Крок біжучого вогню при втраті зв'язку (мс)
 
 bool targetDischargeState = false;    // Цільовий стан розряду, заданий тумблером
 bool bmsActualDischargeState = false; // Реальний стан ключа розряду з BMS (тег 0xAC)
@@ -255,19 +255,22 @@ void updateHeartbeat() {
 #endif
 }
 
-// Мигання всіх LED при відсутності зв'язку з BMS
+// Втрата зв'язку з BMS: біжучий вогонь червоний -> жовтий -> зелений.
+// Послідовно, а не всі разом: три лампи, що мигають одночасно, бічним
+// зором читаються як одна блимаюча, а біжучий вогонь ні з чим не
+// сплутати — видно напрямок, тож стан очевидний і краєм ока.
 void updateNoConnectionBlink() {
-  static unsigned long lastBlinkMs = 0;
-  static bool blinkState = false;
+  static unsigned long lastStepMs = 0;
+  static uint8_t phase = 0;
 
-  if (millis() - lastBlinkMs >= NO_CONN_BLINK_MS) {
-    lastBlinkMs = millis();
-    blinkState = !blinkState;
+  if (millis() - lastStepMs >= NO_CONN_STEP_MS) {
+    lastStepMs = millis();
+    phase = (uint8_t)((phase + 1) % 3);
   }
 
-  digitalWrite(LED_PIN_RED, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_YELLOW, blinkState ? HIGH : LOW);
-  digitalWrite(LED_PIN_GREEN, blinkState ? HIGH : LOW);
+  digitalWrite(LED_PIN_RED, phase == 0 ? HIGH : LOW);
+  digitalWrite(LED_PIN_YELLOW, phase == 1 ? HIGH : LOW);
+  digitalWrite(LED_PIN_GREEN, phase == 2 ? HIGH : LOW);
 }
 
 // Визначення активного коду помилки (1..6) за реальними фізичними параметрами
@@ -298,10 +301,10 @@ void updateLedIndicators() {
   // Перевірка зв'язку з BMS
   bmsConnected = (lastBmsRxMs > 0) && (millis() - lastBmsRxMs < BMS_TIMEOUT_MS);
 
-  // Немає зв'язку — мигаємо всіма трьома, це має пріоритет над усім іншим
+  // Немає зв'язку — біжучий вогонь, це має пріоритет над усім іншим
   if (!bmsConnected) {
     updateNoConnectionBlink();
-    ledState = "ALL blink (no link)";
+    ledState = "CHASE R-Y-G (no link)";
     ledWeb = "nc";
     return;
   }
@@ -1021,7 +1024,11 @@ border:2px solid #2a373b;transition:background .15s}
 .lamp.on.y{background:#d9a81c;box-shadow:0 0 22px #d9a81c88}
 .lamp.on.g{background:#2fa360;box-shadow:0 0 22px #2fa36088}
 .lamp.blink{animation:b .6s steps(1,end) infinite}
+.lamp.chase{animation:c .9s steps(1,end) infinite}
+#ly.chase{animation-delay:.3s}
+#lg.chase{animation-delay:.6s}
 @keyframes b{50%{background:#1b2427;box-shadow:none}}
+@keyframes c{33%{background:#1b2427;box-shadow:none}}
 .rows{background:#161d20;border:1px solid #2a373b;border-radius:6px;
 padding:12px 14px;margin:0 0 18px}
 .rows div{font-family:ui-monospace,Consolas,monospace;font-size:16px;
@@ -1057,7 +1064,7 @@ const m={r:["lr",0],rb:["lr",1],y:["ly",0],g:["lg",0],gb:["lg",1]};
 ["lr","ly","lg"].forEach(k=>{const e=document.getElementById(k);
 e.className="lamp "+k[1]});
 if(j.led=="nc"){["lr","ly","lg"].forEach(k=>{const e=
-document.getElementById(k);e.className="lamp "+k[1]+" on blink"})}
+document.getElementById(k);e.className="lamp "+k[1]+" on chase"})}
 else if(m[j.led]){const e=document.getElementById(m[j.led][0]);
 e.className="lamp "+m[j.led][0][1]+" on"+(m[j.led][1]?" blink":"")}
 dsg=j.dsg;web=j.web;

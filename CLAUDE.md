@@ -61,7 +61,7 @@ different, the write is re-sent every 300 ms until the two agree. Telemetry is p
 | no faults, discharge on, SOC ≤ 20 % | green blink |
 | faults, discharge on | red solid |
 | faults, discharge off | red blink |
-| no BMS reply for 5 s | all three blink at 300 ms — overrides everything |
+| no BMS reply for 5 s | red to yellow to green chase, 300 ms a step — overrides everything |
 
 It reads `bmsActualDischargeState`, not the switch position: the indicator shows what *is*, not what
 was commanded. `determineActiveFaultCode()` returns 1…6; the code itself is no longer displayed, only
