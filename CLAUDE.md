@@ -94,6 +94,13 @@ thing that needs changing.
 
 ## Field notes worth keeping
 
+- Two packs are in service and they are **different chemistries**: an 8S LiFePO₄ and
+  a 7S NMC of 200 Ah. Cell-voltage limits therefore cannot be constants —
+  [include/packs.h](include/packs.h) holds a profile per pack and the firmware picks one
+  by the cell count the BMS reports. Add a pack by adding a row there; do not put
+  thresholds back in `main.cpp`.
+- The 7S NMC pack reaches **29.4 V** fully charged against the optical module’s 30 V
+  ceiling — 2 % margin, tighter than the LiFePO₄ pack’s.
 - The BMS is a **JK-B1A8S10P**, 8S LiFePO₄. On this model family the GPS connector is soldered on the
   **top** side, so its pinout reads mirrored — easy to swap GND and VBAT.
 - The GPS port's fourth pin is **`VBAT`: raw pack voltage**, not a regulated rail. At full charge the
