@@ -98,6 +98,12 @@ thing that needs changing.
   **top** side, so its pinout reads mirrored — easy to swap GND and VBAT.
 - The GPS port's fourth pin is **`VBAT`: raw pack voltage**, not a regulated rail. At full charge the
   pack reaches ≈29.2 V against the optical module's 30 V ceiling — about 3 % margin.
+- In the JK app the GPS port speaks what the protocol list calls
+  **`000 - 4G-GPS Remote module protocol V4.2`**. That is the legacy NW protocol this
+  firmware talks; no 4G is involved, the name is just JK’s. Every other entry is wrong —
+  the Modbus ones are 9600 and a different frame, the LCD ones drive the stock display. Set
+  it on each new pack before blaming the wiring.
+
 - A matched WDM pair must be **different wavelengths** (1310 nm TX one end, 1550 nm the other). Two
   identical ends never link; that cost a long debugging session once already.
 - Baseline link quality in quiet conditions: 100 % of telemetry frames parsed, <1 % line noise.
